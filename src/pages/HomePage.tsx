@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+/** @jsxRuntime classic */
+/** @jsx React.createElement */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '../components/Header';
 import {
   Plus, Calendar, CheckSquare, Flag, BookOpen, Clock, Trash2,
@@ -10,6 +12,14 @@ import { getTodos, createTodo, updateTodo, deleteTodo, type Todo } from '../lib/
 import { getMilestones, createMilestone, deleteMilestone, type Milestone } from '../lib/milestoneService';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import type { Exam } from '../types/database';
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 type Tab = 'plans' | 'todos' | 'milestones';
 
@@ -66,6 +76,7 @@ export function HomePage() {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [todoError, setTodoError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -137,10 +148,10 @@ export function HomePage() {
       setLoading(true);
       const data = await getTodos();
       setTodos(data);
-      setError(null);
+      setTodoError(null);
     } catch (err) {
       console.error('Failed to load todos:', err);
-      setError('Failed to load todos');
+      setTodoError('Failed to load todos. Please check your database connection.');
     } finally {
       setLoading(false);
     }
@@ -178,7 +189,7 @@ export function HomePage() {
       setShowTodoForm(false);
     } catch (err) {
       console.error('Failed to create todo:', err);
-      setError('Failed to create todo');
+      setTodoError('Failed to create todo. Please try again.');
     }
   };
 
@@ -320,6 +331,7 @@ export function HomePage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Global errors (delete plan, milestones, etc.) */}
         {error && (
           <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -403,6 +415,17 @@ export function HomePage() {
         {/* ── To-Do Tab ── */}
         {activeTab === 'todos' && (
           <div>
+            {todoError && (
+              <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">{todoError}</p>
+                <button
+                  onClick={() => { setTodoError(null); loadTodos(); }}
+                  className="mt-2 text-xs text-red-500 underline hover:text-red-700"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">To-Do List</h2>
               <button
