@@ -11,24 +11,24 @@ interface ProgressRingProps {
 
 const COLOR_MAP = {
   emerald: {
-    stroke: 'stroke-emerald-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-emerald-600 dark:text-emerald-400',
+    stroke: 'stroke-amber-500',
+    bg: 'stroke-neutral-800',
+    text: 'text-amber-500',
   },
   blue: {
     stroke: 'stroke-blue-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-blue-600 dark:text-blue-400',
+    bg: 'stroke-neutral-800',
+    text: 'text-blue-400',
   },
   amber: {
     stroke: 'stroke-amber-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-amber-600 dark:text-amber-400',
+    bg: 'stroke-neutral-800',
+    text: 'text-amber-500',
   },
   red: {
     stroke: 'stroke-red-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-red-600 dark:text-red-400',
+    bg: 'stroke-neutral-800',
+    text: 'text-red-400',
   },
 };
 
@@ -48,17 +48,17 @@ export function ProgressRing({
   const offset = circumference - (animatedPercentage / 100) * circumference;
 
   useEffect(() => {
-    // Animate from 0 to actual percentage
     const timer = setTimeout(() => {
       setAnimatedPercentage(percentage);
     }, 100);
     return () => clearTimeout(timer);
   }, [percentage]);
 
+  const isComplete = percentage >= 100;
+
   return (
-    <div className="relative inline-flex items-center justify-center">
+    <div className={`relative inline-flex items-center justify-center ${isComplete ? 'animate-pulse' : ''}`}>
       <svg width={size} height={size} className="transform -rotate-90">
-        {/* Background circle */}
         <circle
           className={colors.bg}
           fill="transparent"
@@ -67,7 +67,6 @@ export function ProgressRing({
           cy={size / 2}
           strokeWidth={strokeWidth}
         />
-        {/* Progress circle */}
         <circle
           className={`${colors.stroke} transition-all duration-1000 ease-out`}
           fill="transparent"
@@ -80,7 +79,6 @@ export function ProgressRing({
           strokeDashoffset={offset}
         />
       </svg>
-      {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {showPercentage && (
           <span className={`text-2xl font-bold ${colors.text}`}>
@@ -88,7 +86,7 @@ export function ProgressRing({
           </span>
         )}
         {label && (
-          <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</span>
+          <span className="text-xs text-neutral-500 mt-1">{label}</span>
         )}
       </div>
     </div>

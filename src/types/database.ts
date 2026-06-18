@@ -16,6 +16,7 @@ export interface Topic {
   is_completed: boolean;
   completed_at: string | null;
   notes: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }

@@ -10,14 +10,32 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+export function PublicRoute({ children }: ProtectedRouteProps) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
