@@ -5,16 +5,12 @@ import {
   getExamWithDetails,
   updateTopicAssignment,
   updateAssignmentCompletion,
-  updateTopicCompletion,
-  batchUpdateAssignmentCompletion,
-  batchUpdateTopicCompletion,
   updateTopic as updateTopicService,
   deleteTopic as deleteTopicService,
   deleteAssignmentsOnDate,
   recalculateSchedule,
   resetSchedule,
   deleteExam,
-  renameExam,
 } from '../lib/examService';
 import {
   ArrowLeft,
@@ -34,9 +30,8 @@ import {
   Clock,
   Target,
   BarChart3,
-  Pencil,
 } from 'lucide-react';
-import { format, parseISO, differenceInDays, differenceInCalendarDays, isBefore, startOfDay, addDays } from 'date-fns';
+import { format, parseISO, differenceInDays, isBefore, startOfDay, addDays } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import type { Exam, Topic, DayWeight, ScheduledAssignment } from '../types/database';
 import { TopicEditModal } from '../components/TopicEditModal';
@@ -47,7 +42,6 @@ import { PhaseBreakdown } from '../components/PhaseBreakdown';
 import { TodayPanel } from '../components/TodayPanel';
 import { StreakBadge } from '../components/StreakBadge';
 import { recordStudyActivity, getStreakData } from '../lib/streakService';
-import { EFFORT_META } from '../lib/effortColors';
 
 interface ExamWithDetails {
   exam: Exam;
@@ -55,6 +49,24 @@ interface ExamWithDetails {
   dayWeights: DayWeight[];
   assignments: ScheduledAssignment[];
 }
+
+const EFFORT_COLORS: Record<number, string> = {
+  1: 'bg-emerald-500',
+  2: 'bg-blue-500',
+  3: 'bg-amber-500',
+  4: 'bg-orange-500',
+  5: 'bg-red-500',
+};
+
+const EFFORT_LABELS: Record<number, string> = {
+  1: 'Minimal',
+  2: 'Light',
+  3: 'Medium',
+  4: 'Heavy',
+  5: 'Very Heavy',
+};
+
+// ─── Module-level components (stable references, no re-mount on parent re-render) ───
 
 interface TopicCardProps {
   assignment: ScheduledAssignment;
@@ -91,49 +103,49 @@ function TopicCard({
           onMouseLeave={onMouseLeave}
           onClick={() => { if (isBulkMode) onSelect(assignment.id); }}
           className={`group relative flex items-start gap-2 p-2 rounded-lg transition cursor-pointer
-            ${snapshot.isDragging ? 'shadow-lg bg-neutral-700 scale-105' : ''}
-            ${assignment.is_completed ? 'bg-neutral-900/50' : 'hover:bg-neutral-800/50'}
-            ${isSelected ? 'ring-2 ring-amber-500 bg-amber-500/10' : ''}
+            ${snapshot.isDragging ? 'shadow-lg bg-white dark:bg-slate-700 scale-105' : ''}
+            ${assignment.is_completed ? 'bg-slate-50 dark:bg-slate-900/50' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}
+            ${isSelected ? 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : ''}
           `}
         >
           {isBulkMode && (
             <div className="absolute -left-1 top-1/2 -translate-y-1/2">
               {isSelected ? (
-                <CheckCircle className="w-5 h-5 text-amber-500" />
+                <CheckCircle className="w-5 h-5 text-emerald-500" />
               ) : (
-                <div className="w-5 h-5 rounded-full border-2 border-neutral-600" />
+                <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600" />
               )}
             </div>
           )}
 
           <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); if (!isBulkMode) onToggle(assignment.id, assignment.is_completed); }}>
             {isUpdating ? (
-              <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             ) : assignment.is_completed ? (
-              <CheckCircle className="w-5 h-5 text-amber-500" />
+              <CheckCircle className="w-5 h-5 text-emerald-500" />
             ) : (
-              <div className="w-5 h-5 rounded-full border-2 border-neutral-600 hover:border-amber-500 transition" />
+              <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 transition" />
             )}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-1">
               <span className={`text-sm font-medium leading-tight ${
-                assignment.is_completed ? 'text-neutral-500 line-through' : 'text-white'
+                assignment.is_completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'
               }`}>
                 {topic.title}
               </span>
               {topic.notes && (
                 <span title={topic.notes} className="flex-shrink-0 mt-0.5">
-                  <Edit3 className="w-3 h-3 text-blue-400" />
+                  <Edit3 className="w-3 h-3 text-blue-400 dark:text-blue-500" />
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <div className={`w-2 h-2 rounded-full ${EFFORT_META[topic.estimated_effort].dot}`} />
-              <span className="text-xs text-neutral-500">{EFFORT_META[topic.estimated_effort].label}</span>
+              <div className={`w-2 h-2 rounded-full ${EFFORT_COLORS[topic.estimated_effort]}`} />
+              <span className="text-xs text-slate-500 dark:text-slate-400">{EFFORT_LABELS[topic.estimated_effort]}</span>
               {wasMoved && (
-                <span className="flex items-center gap-1 text-xs text-amber-500">
+                <span className="flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400">
                   <Move className="w-3 h-3" />
                   moved
                 </span>
@@ -142,7 +154,7 @@ function TopicCard({
           </div>
 
           {isHovered && wasMoved && (
-            <div className="absolute left-0 right-0 -bottom-10 bg-neutral-950 text-white text-xs py-1.5 px-2 rounded shadow-lg z-10 border border-neutral-800">
+            <div className="absolute left-0 right-0 -bottom-10 bg-slate-800 dark:bg-slate-900 text-white text-xs py-1.5 px-2 rounded shadow-lg z-10">
               Originally: {format(parseISO(assignment.recommended_date), 'EEE, MMM d')}
             </div>
           )}
@@ -174,14 +186,12 @@ function DayCard({
   selectedAssignments, hoveredAssignment, onToggle, onContextMenu,
   onMouseEnter, onMouseLeave, onSelect, onDeleteTile,
 }: DayCardProps) {
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const topicMap = new Map(topics.map((t) => [t.id, t]));
   const completedCount = assignments.filter((a) => a.is_completed).length;
   const dateObj = parseISO(date);
   const isToday = format(new Date(), 'yyyy-MM-dd') === date;
   const isPast = isBefore(dateObj, startOfDay(new Date()));
   const phase = isRevision ? 'revision' : 'learning';
-  const incompleteCount = assignments.filter((a) => !a.is_completed).length;
 
   return (
     <Droppable droppableId={`${phase}-${date}`}>
@@ -189,66 +199,37 @@ function DayCard({
         <div
           ref={provided.innerRef}
           {...provided.droppableProps}
-          className={`bg-neutral-900 rounded-xl border ${
-            isToday ? 'border-amber-500 ring-2 ring-amber-500/20'
-            : snapshot.isDraggingOver ? 'border-blue-500 ring-2 ring-blue-500/20'
-            : showClearConfirm ? 'border-red-700'
-            : 'border-neutral-800'
+          className={`bg-white dark:bg-slate-800 rounded-xl border ${
+            isToday ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+            : snapshot.isDraggingOver ? 'border-blue-400 ring-2 ring-blue-400/30'
+            : 'border-slate-200 dark:border-slate-700'
           } ${isPast ? 'opacity-60' : ''} p-4 transition-shadow ${snapshot.isDraggingOver ? 'shadow-lg' : ''}`}
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-sm font-medium text-white">
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
                 {format(dateObj, 'EEE, MMM d')}
               </div>
-              {isToday && <span className="text-xs text-amber-500 font-medium">Today</span>}
-              {isPast && !isToday && <span className="text-xs text-red-400 font-medium">Past</span>}
+              {isToday && <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Today</span>}
+              {isPast && !isToday && <span className="text-xs text-red-500 font-medium">Past</span>}
             </div>
             <div className="flex items-center gap-1.5">
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 isRevision
-                  ? 'bg-blue-500/10 text-blue-400'
-                  : 'bg-orange-900/30 text-orange-400'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
               }`}>
                 {isRevision ? 'Revision' : 'Learning'}
               </span>
               <button
-                onClick={() => setShowClearConfirm(true)}
-                title={`Unschedule all topics from ${format(dateObj, 'MMM d')}`}
-                className="p-1 rounded text-neutral-600 hover:text-red-400 hover:bg-red-900/20 transition"
+                onClick={() => onDeleteTile(date, phase)}
+                title="Delete this date tile"
+                className="p-1 rounded text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
-
-          {/* Inline unschedule confirmation */}
-          {showClearConfirm && (
-            <div className="mb-3 rounded-lg bg-red-900/20 border border-red-800 p-3">
-              <p className="text-xs text-red-300 font-medium mb-1">
-                Unschedule {assignments.length} topic{assignments.length !== 1 ? 's' : ''}?
-              </p>
-              <p className="text-xs text-neutral-500 mb-3">
-                {incompleteCount > 0
-                  ? `${incompleteCount} incomplete topic${incompleteCount !== 1 ? 's' : ''} will be returned to the unscheduled pool.`
-                  : 'All topics here are already complete.'}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { onDeleteTile(date, phase); setShowClearConfirm(false); }}
-                  className="flex-1 py-1 text-xs font-semibold rounded bg-red-700 hover:bg-red-600 text-white transition"
-                >
-                  Unschedule
-                </button>
-                <button
-                  onClick={() => setShowClearConfirm(false)}
-                  className="flex-1 py-1 text-xs font-medium rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="space-y-2 min-h-[40px]">
             {assignments.map((assignment, idx) => {
@@ -273,7 +254,7 @@ function DayCard({
               );
             })}
             {assignments.length === 0 && (
-              <div className="text-xs text-neutral-600 italic py-2 text-center">
+              <div className="text-xs text-slate-400 dark:text-slate-500 italic py-2 text-center">
                 No topics assigned
               </div>
             )}
@@ -281,13 +262,13 @@ function DayCard({
           </div>
 
           {assignments.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-neutral-800">
-              <div className="text-xs text-neutral-500">
+            <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 {completedCount} / {assignments.length} completed
               </div>
-              <div className="mt-1.5 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+              <div className="mt-1.5 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 transition-all duration-500"
+                  className="h-full bg-emerald-500 transition-all duration-500"
                   style={{ width: `${assignments.length > 0 ? (completedCount / assignments.length) * 100 : 0}%` }}
                 />
               </div>
@@ -318,16 +299,11 @@ export function ExamSchedulePage() {
   const [hoveredAssignment, setHoveredAssignment] = useState<string | null>(null);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
+  // Tracks which date tiles are visible per phase; persists even when assignments are dragged away
   const [activeSlots, setActiveSlots] = useState<{ learning: Set<string>; revision: Set<string> }>({
     learning: new Set(),
     revision: new Set(),
   });
-  const [moveHistory, setMoveHistory] = useState<
-    { assignmentId: string; fromDate: string; toDate: string }[]
-  >([]);
-  const [scheduleBehind, setScheduleBehind] = useState(false);
-  const [isRenamingExam, setIsRenamingExam] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     if (examId) {
@@ -336,6 +312,7 @@ export function ExamSchedulePage() {
     loadStreaks();
   }, [examId]);
 
+  // Whenever assignments change, add any new dates to activeSlots (never removes, only adds)
   useEffect(() => {
     if (!data) return;
     setActiveSlots((prev) => {
@@ -349,6 +326,7 @@ export function ExamSchedulePage() {
     });
   }, [data]);
 
+  // Close context menu on click outside
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
     if (contextMenu) {
@@ -362,6 +340,7 @@ export function ExamSchedulePage() {
       setLoading(true);
       let result = await getExamWithDetails(id);
 
+      // Auto-recalculate when incomplete topics are stuck on past dates or have no assignment
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const completedTopicIds = new Set(result.topics.filter((t) => t.is_completed).map((t) => t.id));
       const assignedTopicIds = new Set(result.assignments.map((a) => a.topic_id));
@@ -370,17 +349,9 @@ export function ExamSchedulePage() {
         (a) => a.assigned_date < todayStr && !completedTopicIds.has(a.topic_id)
       );
       const hasUnassignedIncomplete = incompleteTopicIds.some((id) => !assignedTopicIds.has(id));
-
-      if (hasUnassignedIncomplete) {
-        // Auto-fix truly broken state: a topic exists with no scheduled row at all.
-        // This is a data integrity issue, not a user choice, so silently correct it.
+      if (hasStalePastAssignment || hasUnassignedIncomplete) {
         await recalculateSchedule(id);
         result = await getExamWithDetails(id);
-        setScheduleBehind(false);
-      } else {
-        // Stale past assignments are a user concern — inform them and let them decide.
-        // Silently recalculating would overwrite any manual date moves they made.
-        setScheduleBehind(hasStalePastAssignment);
       }
 
       setData(result);
@@ -411,18 +382,9 @@ export function ExamSchedulePage() {
       const updatedAssignments = data.assignments.map((a) =>
         a.id === assignmentId ? updatedAssignment : a
       );
+      setData({ ...data, assignments: updatedAssignments });
 
-      // Sync topic.is_completed so TodayPanel's allTopicsComplete (and confetti) works.
-      // Only learning assignments gate topic completion — revision is a review layer.
-      let updatedTopics = data.topics;
-      const assignment = data.assignments.find((a) => a.id === assignmentId);
-      if (assignment?.phase === 'learning') {
-        const updatedTopic = await updateTopicCompletion(assignment.topic_id, !currentStatus);
-        updatedTopics = data.topics.map((t) => (t.id === assignment.topic_id ? updatedTopic : t));
-      }
-
-      setData({ ...data, assignments: updatedAssignments, topics: updatedTopics });
-
+      // Sync today's completed count for streak tracking
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const completedToday = updatedAssignments.filter(
         (a) => a.is_completed && a.completed_at &&
@@ -437,6 +399,7 @@ export function ExamSchedulePage() {
     }
   };
 
+  // Drag and drop handler
   const handleDragEnd = useCallback(
     async (result: DropResult) => {
       if (!data || !result.destination) return;
@@ -444,6 +407,7 @@ export function ExamSchedulePage() {
       const { draggableId, source, destination } = result;
       const assignmentId = draggableId.replace('assignment-', '');
 
+      // droppableId: "learning-2026-06-11" — split on first "-" only to preserve date
       const parseDroppable = (id: string) => {
         const idx = id.indexOf('-');
         return { phase: id.slice(0, idx), date: id.slice(idx + 1) };
@@ -451,17 +415,21 @@ export function ExamSchedulePage() {
       const src = parseDroppable(source.droppableId);
       const dest = parseDroppable(destination.droppableId);
 
+      // Silently block cross-phase drops
       if (src.phase !== dest.phase) return;
+
+      // Silently block drops onto past dates
       if (isBefore(parseISO(dest.date), startOfDay(new Date()))) return;
 
+      // Find assignment
       const assignment = data.assignments.find((a) => a.id === assignmentId);
       if (!assignment || assignment.assigned_date === dest.date) return;
 
       setUpdating(assignmentId);
-      const prevDate = assignment.assigned_date;
       try {
         await updateTopicAssignment(assignment.id, dest.date);
 
+        // Ensure dest date has a tile slot
         setActiveSlots((prev) => {
           const phaseKey = dest.phase as 'learning' | 'revision';
           const updated = new Set(prev[phaseKey]);
@@ -477,8 +445,6 @@ export function ExamSchedulePage() {
               : a
           ),
         });
-
-        setMoveHistory((h) => [...h.slice(-19), { assignmentId, fromDate: prevDate, toDate: dest.date }]);
       } catch (err) {
         console.error('Failed to move topic:', err);
       } finally {
@@ -487,41 +453,6 @@ export function ExamSchedulePage() {
     },
     [data]
   );
-
-  const handleUndo = useCallback(async () => {
-    if (!data || moveHistory.length === 0) return;
-    const last = moveHistory[moveHistory.length - 1];
-    const assignment = data.assignments.find((a) => a.id === last.assignmentId);
-    if (!assignment) return;
-    setUpdating(last.assignmentId);
-    try {
-      await updateTopicAssignment(last.assignmentId, last.fromDate);
-      setData({
-        ...data,
-        assignments: data.assignments.map((a) =>
-          a.id === last.assignmentId
-            ? { ...a, assigned_date: last.fromDate, updated_at: new Date().toISOString() }
-            : a
-        ),
-      });
-      setMoveHistory((h) => h.slice(0, -1));
-    } catch (err) {
-      console.error('Failed to undo move:', err);
-    } finally {
-      setUpdating(null);
-    }
-  }, [data, moveHistory]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [handleUndo]);
 
   const handleDeleteTile = async (date: string, phase: 'learning' | 'revision') => {
     if (!examId || !data) return;
@@ -572,8 +503,8 @@ export function ExamSchedulePage() {
     setContextMenu({ assignmentId, x: e.clientX, y: e.clientY });
   };
 
-  const executeRecalculate = async () => {
-    if (!examId) return;
+  const handleRecalculate = async () => {
+    if (!examId || !confirm('Recalculate schedule? This will redistribute incomplete topics.')) return;
     try {
       setLoading(true);
       await recalculateSchedule(examId);
@@ -582,11 +513,6 @@ export function ExamSchedulePage() {
       console.error('Failed to recalculate:', err);
       setError('Failed to recalculate schedule');
     }
-  };
-
-  const handleRecalculate = async () => {
-    if (!confirm('Recalculate schedule? This will redistribute incomplete topics.')) return;
-    await executeRecalculate();
   };
 
   const handleReset = async () => {
@@ -599,25 +525,6 @@ export function ExamSchedulePage() {
       console.error('Failed to reset:', err);
       setError('Failed to reset schedule');
     }
-  };
-
-  const startExamRename = () => {
-    if (!data) return;
-    setRenameValue(data.exam.name);
-    setIsRenamingExam(true);
-  };
-
-  const commitExamRename = async () => {
-    const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== data?.exam.name && examId) {
-      try {
-        await renameExam(examId, trimmed);
-        setData(prev => prev ? { ...prev, exam: { ...prev.exam, name: trimmed } } : prev);
-      } catch {
-        setError('Failed to rename study plan.');
-      }
-    }
-    setIsRenamingExam(false);
   };
 
   const handleDelete = async () => {
@@ -673,32 +580,16 @@ export function ExamSchedulePage() {
   const handleBulkComplete = async (complete: boolean) => {
     if (!data || selectedAssignments.size === 0) return;
     try {
-      const ids = Array.from(selectedAssignments);
-      await batchUpdateAssignmentCompletion(ids, complete);
-
-      // Sync topic.is_completed for all selected learning assignments (one batch call)
-      const learningTopicIds = data.assignments
-        .filter((a) => ids.includes(a.id) && a.phase === 'learning')
-        .map((a) => a.topic_id);
-
-      let updatedTopics = data.topics;
-      if (learningTopicIds.length > 0) {
-        await batchUpdateTopicCompletion(learningTopicIds, complete);
-        updatedTopics = data.topics.map((t) =>
-          learningTopicIds.includes(t.id)
-            ? { ...t, is_completed: complete, completed_at: complete ? new Date().toISOString() : null }
-            : t
-        );
-      }
-
+      await Promise.all(
+        Array.from(selectedAssignments).map((id) => updateAssignmentCompletion(id, complete))
+      );
       setData({
         ...data,
         assignments: data.assignments.map((a) =>
-          ids.includes(a.id)
+          selectedAssignments.has(a.id)
             ? { ...a, is_completed: complete, completed_at: complete ? new Date().toISOString() : null }
             : a
         ),
-        topics: updatedTopics,
       });
       setSelectedAssignments(new Set());
       setIsBulkMode(false);
@@ -707,9 +598,11 @@ export function ExamSchedulePage() {
     }
   };
 
+  // Group assignments by (phase, date); use activeSlots so empty tiles persist after drags
   const dayCards = useMemo(() => {
     if (!data) return { learning: [] as { date: string; assignments: ScheduledAssignment[] }[], revision: [] as { date: string; assignments: ScheduledAssignment[] }[] };
 
+    // Index assignments by phase+date key
     const byPhaseDate = new Map<string, ScheduledAssignment[]>();
     data.assignments.forEach((a) => {
       const key = `${a.phase}::${a.assigned_date}`;
@@ -733,6 +626,7 @@ export function ExamSchedulePage() {
     };
   }, [data, activeSlots]);
 
+  // These MUST be before any early returns to obey Rules of Hooks
   const assignmentCompletions = useMemo(() => {
     if (!data) return [];
     const completionsByDate = new Map<string, number>();
@@ -762,21 +656,21 @@ export function ExamSchedulePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-neutral-400">{error || 'Study plan not found'}</p>
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-slate-600 dark:text-slate-400">{error || 'Study plan not found'}</p>
           <button
             onClick={() => navigate('/')}
-            className="mt-4 px-4 py-2 bg-amber-500 text-neutral-900 font-semibold rounded-lg hover:bg-amber-400 transition"
+            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg"
           >
             Go Home
           </button>
@@ -785,19 +679,19 @@ export function ExamSchedulePage() {
     );
   }
 
-  // Progress ring tracks learning-phase completion only.
-  // Counting both phases inflated the denominator 2× and made 100% unreachable from learning alone.
-  const completedAssignments = data.assignments.filter((a) => a.is_completed && a.phase === 'learning').length;
-  const totalAssignments = data.assignments.filter((a) => a.phase === 'learning').length;
+  const completedAssignments = data.assignments.filter((a) => a.is_completed).length;
+  const totalAssignments = data.assignments.length;
   const progressPercentage = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
   const daysRemaining = differenceInDays(new Date(data.exam.exam_date), new Date());
   const totalTopics = data.topics.length;
 
+  // Calculate today's completed assignments
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const completedToday = data.assignments.filter(
     (a) => a.is_completed && a.completed_at && format(parseISO(a.completed_at), 'yyyy-MM-dd') === todayStr
   ).length;
 
+  // Calculate phase stats
   const learningAssignments = data.assignments.filter((a) => a.phase === 'learning');
   const revisionAssignments = data.assignments.filter((a) => a.phase === 'revision');
 
@@ -806,23 +700,25 @@ export function ExamSchedulePage() {
   const revisionCompleted = revisionAssignments.filter((a) => a.is_completed).length;
   const revisionTotal = revisionAssignments.length;
 
+  // Calculate daily pace needed
   const assignmentsRemaining = totalAssignments - completedAssignments;
   const dailyPace = studyDaysLeft > 0 && assignmentsRemaining > 0
     ? Math.ceil(assignmentsRemaining / studyDaysLeft)
     : 0;
 
-  const totalDays = differenceInCalendarDays(new Date(data.exam.exam_date), new Date(data.exam.created_at));
-  // Day 0 (creation day): expected progress is 0% — the student hasn't had time yet.
-  // max(0, ...) prevents showing "Behind" immediately on the day the plan is created.
-  const daysElapsed = Math.max(0, differenceInCalendarDays(new Date(), new Date(data.exam.created_at)));
+  // Calculate status (ahead/on-track/behind)
+  const totalDays = differenceInDays(new Date(data.exam.exam_date), new Date(data.exam.created_at));
+  const daysElapsed = differenceInDays(new Date(), new Date(data.exam.created_at));
   const status = calculateStatus(progressPercentage, daysElapsed, totalDays);
 
+  // Calculate days difference for status badge
   const expectedProgress = totalDays > 0 ? (daysElapsed / totalDays) * 100 : 0;
   const progressDiff = progressPercentage - expectedProgress;
   const daysDiff = totalDays > 0 ? Math.round((progressDiff / 100) * totalDays) : 0;
 
+
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <Header examName={data.exam.name} />
 
       {/* Context Menu */}
@@ -832,7 +728,7 @@ export function ExamSchedulePage() {
         const canRestore = assignment && assignment.assigned_date !== assignment.recommended_date;
         return (
           <div
-            className="fixed z-50 bg-neutral-900 rounded-lg shadow-xl border border-neutral-800 py-1 min-w-48"
+            className="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1 min-w-48"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -841,7 +737,7 @@ export function ExamSchedulePage() {
                 if (topic) setEditingTopic(topic);
                 setContextMenu(null);
               }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               <Edit3 className="w-4 h-4" />
               Edit Topic
@@ -849,18 +745,18 @@ export function ExamSchedulePage() {
             {canRestore && (
               <button
                 onClick={() => handleRestoreTopic(contextMenu.assignmentId)}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 <Undo2 className="w-4 h-4" />
                 Restore to {format(parseISO(assignment!.recommended_date), 'MMM d')}
               </button>
             )}
-            <hr className="my-1 border-neutral-800" />
+            <hr className="my-1 border-slate-200 dark:border-slate-700" />
             <button
               onClick={() => {
                 if (topic) handleTopicDelete(topic.id);
               }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
             >
               <Trash2 className="w-4 h-4" />
               Delete Topic
@@ -881,42 +777,19 @@ export function ExamSchedulePage() {
       )}
 
       {/* Sub-header with actions */}
-      <div className="bg-neutral-900 border-b border-neutral-800">
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/')}
-                className="flex items-center gap-2 text-neutral-400 hover:text-neutral-200 transition"
+                className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span className="text-sm">Back</span>
               </button>
 
-              {/* Exam rename inline */}
-              {isRenamingExam ? (
-                <input
-                  autoFocus
-                  value={renameValue}
-                  onChange={e => setRenameValue(e.target.value)}
-                  onBlur={commitExamRename}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') commitExamRename();
-                    if (e.key === 'Escape') setIsRenamingExam(false);
-                  }}
-                  className="text-sm font-medium bg-neutral-800 text-white rounded-md px-2 py-1 border border-amber-500 outline-none w-48 focus:ring-1 focus:ring-amber-500"
-                />
-              ) : (
-                <button
-                  onClick={startExamRename}
-                  className="flex items-center gap-1.5 text-neutral-500 hover:text-amber-400 transition text-sm"
-                  title="Rename study plan"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Rename
-                </button>
-              )}
-
+              {/* Bulk mode toggle */}
               <button
                 onClick={() => {
                   setIsBulkMode(!isBulkMode);
@@ -924,46 +797,35 @@ export function ExamSchedulePage() {
                 }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   isBulkMode
-                    ? 'bg-amber-500/10 text-amber-400'
-                    : 'text-neutral-400 hover:bg-neutral-800'
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 <Check className="w-4 h-4" />
                 Bulk Select
               </button>
 
-              {moveHistory.length > 0 && (
-                <button
-                  onClick={handleUndo}
-                  disabled={!!updating}
-                  title="Undo last move (Ctrl+Z)"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-neutral-400 hover:bg-neutral-800 disabled:opacity-50 transition"
-                >
-                  <Undo2 className="w-4 h-4" />
-                  Undo{moveHistory.length > 1 ? ` (${moveHistory.length})` : ''}
-                </button>
-              )}
-
+              {/* Bulk actions */}
               {isBulkMode && selectedAssignments.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-neutral-400">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
                     {selectedAssignments.size} selected
                   </span>
                   <button
                     onClick={() => handleBulkComplete(true)}
-                    className="px-3 py-1 text-sm bg-amber-500 text-neutral-900 font-semibold rounded-lg hover:bg-amber-400 transition"
+                    className="px-3 py-1 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                   >
                     Mark Complete
                   </button>
                   <button
                     onClick={() => handleBulkComplete(false)}
-                    className="px-3 py-1 text-sm bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 transition"
+                    className="px-3 py-1 text-sm bg-slate-600 text-white rounded-lg hover:bg-slate-700"
                   >
                     Mark Incomplete
                   </button>
                   <button
                     onClick={() => setSelectedAssignments(new Set())}
-                    className="p-1 text-neutral-500 hover:text-neutral-300 transition"
+                    className="p-1 text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -974,7 +836,7 @@ export function ExamSchedulePage() {
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-lg hover:bg-neutral-800 text-neutral-400 transition"
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
@@ -982,25 +844,34 @@ export function ExamSchedulePage() {
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-48 bg-neutral-900 rounded-lg shadow-lg border border-neutral-800 z-20 py-1">
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-20 py-1">
                     <button
-                      onClick={() => { setShowMenu(false); handleRecalculate(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                      onClick={() => {
+                        setShowMenu(false);
+                        handleRecalculate();
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Recalculate
                     </button>
                     <button
-                      onClick={() => { setShowMenu(false); handleReset(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                      onClick={() => {
+                        setShowMenu(false);
+                        handleReset();
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                     >
                       <RotateCcw className="w-4 h-4" />
                       Reset Progress
                     </button>
-                    <hr className="my-1 border-neutral-800" />
+                    <hr className="my-1 border-slate-200 dark:border-slate-700" />
                     <button
-                      onClick={() => { setShowMenu(false); handleDelete(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
+                      onClick={() => {
+                        setShowMenu(false);
+                        handleDelete();
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete Plan
@@ -1015,47 +886,27 @@ export function ExamSchedulePage() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {scheduleBehind && (
-          <div className="mb-4 p-4 rounded-xl bg-orange-900/20 border border-orange-800 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-orange-400 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-orange-300">Schedule has fallen behind</p>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Some topics were assigned to past dates and weren't completed. Recalculate to redistribute them from today.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => { setScheduleBehind(false); executeRecalculate(); }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-400 text-neutral-900 text-sm font-semibold transition flex-shrink-0"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Recalculate
-            </button>
-          </div>
-        )}
+        {/* Today's Plan Panel */}
         <TodayPanel
           topics={data.topics}
           assignments={data.assignments}
           updating={updating}
           onToggle={handleToggleComplete}
-          onRecalculate={handleRecalculate}
         />
 
         {/* Dashboard Section */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-neutral-500" />
-              <h2 className="text-lg font-semibold text-white">Progress Dashboard</h2>
+              <BarChart3 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Progress Dashboard</h2>
             </div>
             <StreakBadge currentStreak={currentStreak} longestStreak={longestStreak} />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3 mb-6">
             {/* Progress Ring & Status Card */}
-            <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <StatusBadge status={status} daysDiff={daysDiff} />
@@ -1063,15 +914,15 @@ export function ExamSchedulePage() {
                     <StatusDescription status={status} />
                   </div>
                   <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-neutral-400">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                       <Target className="w-4 h-4" />
                       <span>{completedAssignments} / {totalAssignments} tasks done</span>
                     </div>
-                    <div className="flex items-center gap-2 text-neutral-400">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                       <Calendar className="w-4 h-4" />
                       <span>{daysRemaining} days left</span>
                     </div>
-                    <div className="flex items-center gap-2 text-neutral-400">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                       <Clock className="w-4 h-4" />
                       <span>~{dailyPace} topics/day needed</span>
                     </div>
@@ -1088,39 +939,39 @@ export function ExamSchedulePage() {
 
             {/* Quick Stats Cards */}
             <div className="grid grid-cols-2 gap-4 lg:col-span-2">
-              <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
-                <div className="text-sm text-neutral-400 font-medium mb-1">Completed Today</div>
-                <div className="text-3xl font-bold text-amber-500">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Completed Today</div>
+                <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                   {completedToday}
                 </div>
-                <div className="text-xs text-neutral-500 mt-1">
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                   {completedToday > 0 ? 'Great progress!' : 'Start checking off topics!'}
                 </div>
               </div>
-              <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
-                <div className="text-sm text-neutral-400 font-medium mb-1">Learning Progress</div>
-                <div className="text-3xl font-bold text-orange-400">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Learning Progress</div>
+                <div className="text-3xl font-bold text-orange-500">
                   {learningTotal > 0 ? Math.round((learningCompleted / learningTotal) * 100) : 0}%
                 </div>
-                <div className="text-xs text-neutral-500 mt-1">
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                   {learningCompleted} / {learningTotal} topics
                 </div>
               </div>
-              <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
-                <div className="text-sm text-neutral-400 font-medium mb-1">Study Days Left</div>
-                <div className="text-3xl font-bold text-blue-400">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Study Days Left</div>
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                   {studyDaysLeft}
                 </div>
-                <div className="text-xs text-neutral-500 mt-1">
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                   with your schedule
                 </div>
               </div>
-              <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
-                <div className="text-sm text-neutral-400 font-medium mb-1">Revision Progress</div>
-                <div className="text-3xl font-bold text-blue-400">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Revision Progress</div>
+                <div className="text-3xl font-bold text-emerald-500">
                   {revisionTotal > 0 ? Math.round((revisionCompleted / revisionTotal) * 100) : 0}%
                 </div>
-                <div className="text-xs text-neutral-500 mt-1">
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                   {revisionCompleted} / {revisionTotal} topics
                 </div>
               </div>
@@ -1129,8 +980,11 @@ export function ExamSchedulePage() {
 
           {/* Charts Row */}
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6">
-              <h3 className="text-sm font-semibold text-white mb-4">Topic Burn-Down</h3>
+            {/* Burn-Down Chart */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">
+                Topic Burn-Down
+              </h3>
               <BurnDownChart
                 examDate={data.exam.exam_date}
                 createdAt={data.exam.created_at}
@@ -1139,8 +993,11 @@ export function ExamSchedulePage() {
               />
             </div>
 
-            <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6">
-              <h3 className="text-sm font-semibold text-white mb-4">Phase Breakdown</h3>
+            {/* Phase Breakdown */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">
+                Phase Breakdown
+              </h3>
               <PhaseBreakdown
                 learningCompleted={learningCompleted}
                 learningTotal={learningTotal}
@@ -1154,23 +1011,68 @@ export function ExamSchedulePage() {
 
         {/* Calendar Section */}
         <section>
-          <DragDropContext onDragEnd={handleDragEnd}>
-            {/* Learning Phase */}
-            <div className="mb-8">
+
+        {/* Drag and Drop Calendar */}
+        <DragDropContext onDragEnd={handleDragEnd}>
+          {/* Learning Phase */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-3 h-3 rounded-full bg-orange-500" />
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Learning Phase</h2>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                ({dayCards.learning.length} days)
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {dayCards.learning.map(({ date, assignments }) => (
+                <DayCard
+                  key={date}
+                  date={date}
+                  assignments={assignments}
+                  isRevision={false}
+                  topics={data.topics}
+                  updating={updating}
+                  isBulkMode={isBulkMode}
+                  selectedAssignments={selectedAssignments}
+                  hoveredAssignment={hoveredAssignment}
+                  onToggle={handleToggleComplete}
+                  onContextMenu={handleContextMenu}
+                  onMouseEnter={(id) => setHoveredAssignment(id)}
+                  onMouseLeave={() => setHoveredAssignment(null)}
+                  onSelect={toggleAssignmentSelection}
+                  onDeleteTile={handleDeleteTile}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Phase Divider */}
+          {dayCards.revision.length > 0 && (
+            <div className="flex items-center gap-4 my-8">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <Calendar className="w-4 h-4" />
+                <span className="text-sm font-medium">Revision Phase Starts</span>
+              </div>
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+            </div>
+          )}
+
+          {/* Revision Phase */}
+          {dayCards.revision.length > 0 && (
+            <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-3 h-3 rounded-full bg-orange-500" />
-                <h2 className="text-lg font-semibold text-white">Learning Phase</h2>
-                <span className="text-sm text-neutral-500">
-                  ({dayCards.learning.length} days)
-                </span>
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Revision Phase</h2>
+                <span className="text-sm text-slate-500 dark:text-slate-400">({dayCards.revision.length} days)</span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {dayCards.learning.map(({ date, assignments }) => (
+                {dayCards.revision.map(({ date, assignments }) => (
                   <DayCard
                     key={date}
                     date={date}
                     assignments={assignments}
-                    isRevision={false}
+                    isRevision={true}
                     topics={data.topics}
                     updating={updating}
                     isBulkMode={isBulkMode}
@@ -1186,57 +1088,15 @@ export function ExamSchedulePage() {
                 ))}
               </div>
             </div>
-
-            {/* Phase Divider */}
-            {dayCards.revision.length > 0 && (
-              <div className="flex items-center gap-4 my-8">
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-neutral-700 to-transparent" />
-                <div className="flex items-center gap-2 text-neutral-500">
-                  <Calendar className="w-4 h-4" />
-                  <span className="text-sm font-medium">Revision Phase Starts</span>
-                </div>
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-neutral-700 to-transparent" />
-              </div>
-            )}
-
-            {/* Revision Phase */}
-            {dayCards.revision.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-3 h-3 rounded-full bg-blue-400" />
-                  <h2 className="text-lg font-semibold text-white">Revision Phase</h2>
-                  <span className="text-sm text-neutral-500">({dayCards.revision.length} days)</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {dayCards.revision.map(({ date, assignments }) => (
-                    <DayCard
-                      key={date}
-                      date={date}
-                      assignments={assignments}
-                      isRevision={true}
-                      topics={data.topics}
-                      updating={updating}
-                      isBulkMode={isBulkMode}
-                      selectedAssignments={selectedAssignments}
-                      hoveredAssignment={hoveredAssignment}
-                      onToggle={handleToggleComplete}
-                      onContextMenu={handleContextMenu}
-                      onMouseEnter={(id) => setHoveredAssignment(id)}
-                      onMouseLeave={() => setHoveredAssignment(null)}
-                      onSelect={toggleAssignmentSelection}
-                      onDeleteTile={handleDeleteTile}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </DragDropContext>
+          )}
+        </DragDropContext>
         </section>
 
+        {/* Empty state hint */}
         {dayCards.learning.length === 0 && dayCards.revision.length === 0 && (
           <div className="text-center py-12">
-            <Calendar className="w-12 h-12 text-neutral-700 mx-auto mb-4" />
-            <p className="text-neutral-500">No topics scheduled yet</p>
+            <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-500 dark:text-slate-400">No topics scheduled yet</p>
           </div>
         )}
       </main>

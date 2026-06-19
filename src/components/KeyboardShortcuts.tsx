@@ -14,11 +14,13 @@ export function KeyboardShortcutsProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if typing in an input or textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
+      // Skip if meta/ctrl keys are pressed (browser shortcuts)
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return;
       }
@@ -63,6 +65,7 @@ export function KeyboardShortcutsProvider({ children }: { children: ReactNode })
   return <>{children}</>;
 }
 
+// Help component to show shortcuts
 export function KeyboardShortcutsHelp() {
   const shortcuts = [
     { keys: 'N', description: 'New study plan' },
@@ -73,12 +76,12 @@ export function KeyboardShortcutsHelp() {
   ];
 
   return (
-    <div className="text-sm text-neutral-400">
+    <div className="text-sm text-slate-600 dark:text-slate-400">
       <div className="font-medium mb-2">Keyboard Shortcuts:</div>
       <div className="grid gap-1">
         {shortcuts.map((s) => (
           <div key={s.keys} className="flex items-center gap-3">
-            <kbd className="px-2 py-1 rounded bg-neutral-800 text-xs font-mono text-neutral-300">
+            <kbd className="px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-xs font-mono">
               {s.keys}
             </kbd>
             <span className="text-xs">{s.description}</span>

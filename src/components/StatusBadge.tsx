@@ -18,19 +18,19 @@ const STATUS_CONFIG: Record<StatusType, StatusConfig> = {
   ahead: {
     label: 'Ahead',
     icon: TrendingUp,
-    classes: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    classes: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
     description: 'You\'re ahead of schedule! Keep it up!',
   },
   'on-track': {
     label: 'On Track',
     icon: Minus,
-    classes: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    classes: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
     description: 'You\'re right on track. Keep going!',
   },
   behind: {
     label: 'Behind',
     icon: TrendingDown,
-    classes: 'bg-red-900/20 text-red-400 border-red-800',
+    classes: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
     description: 'You\'re behind schedule. Time to catch up!',
   },
 };
@@ -61,12 +61,13 @@ export function StatusBadge({ status, daysDiff }: StatusBadgeProps) {
 export function StatusDescription({ status }: { status: StatusType }) {
   const config = STATUS_CONFIG[status];
   return (
-    <p className="text-sm text-neutral-400">
+    <p className="text-sm text-slate-500 dark:text-slate-400">
       {config.description}
     </p>
   );
 }
 
+// Calculate status based on progress vs expected progress
 export function calculateStatus(
   progressPercentage: number,
   daysElapsed: number,
