@@ -5,6 +5,8 @@ import { format, addDays, differenceInDays } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { createExam } from '../lib/examService';
 import { EFFORT_META } from '../lib/effortColors';
+import { loadDefaultDayWeights } from './SettingsModal';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 const DRAFT_KEY = 'zenith_wizard_draft';
 
@@ -54,6 +56,7 @@ function clearDraft() {
 
 export function ExamSetupWizard() {
   const navigate = useNavigate();
+  const { defaultRevisionDays } = usePreferences();
 
   const savedDraft = loadDraft();
   const hasMeaningfulDraft =
@@ -71,10 +74,10 @@ export function ExamSetupWizard() {
       : [{ id: crypto.randomUUID(), title: '', estimatedEffort: 3 }]
   );
   const [dayWeights, setDayWeights] = useState<DayWeightInput[]>(
-    hasMeaningfulDraft ? savedDraft!.dayWeights : DAYS_OF_WEEK
+    hasMeaningfulDraft ? savedDraft!.dayWeights : loadDefaultDayWeights()
   );
   const [revisionDays, setRevisionDays] = useState(
-    hasMeaningfulDraft ? savedDraft!.revisionDays : 7
+    hasMeaningfulDraft ? savedDraft!.revisionDays : defaultRevisionDays
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,8 +113,8 @@ export function ExamSetupWizard() {
     setExamName('');
     setExamDate('');
     setTopics([{ id: crypto.randomUUID(), title: '', estimatedEffort: 3 }]);
-    setDayWeights(DAYS_OF_WEEK);
-    setRevisionDays(7);
+    setDayWeights(loadDefaultDayWeights());
+    setRevisionDays(defaultRevisionDays);
   };
 
   const validateStep = (stepNumber: number): boolean => {

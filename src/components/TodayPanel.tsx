@@ -4,6 +4,15 @@ import { Sun, CheckCircle, Circle, Loader2, BookOpen, RefreshCw, CalendarDays, T
 import confetti from 'canvas-confetti';
 import type { Topic, ScheduledAssignment } from '../types/database';
 import { EFFORT_META } from '../lib/effortColors';
+import { usePreferences, type AccentColor } from '../contexts/PreferencesContext';
+
+const ACCENT_CONFETTI_COLORS: Record<AccentColor, string[]> = {
+  amber:   ['#F5A623', '#FCD34D', '#FBBF24', '#ffffff', '#a3a3a3'],
+  blue:    ['#3b82f6', '#60a5fa', '#93c5fd', '#ffffff', '#a3a3a3'],
+  violet:  ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ffffff', '#a3a3a3'],
+  emerald: ['#10b981', '#34d399', '#6ee7b7', '#ffffff', '#a3a3a3'],
+  rose:    ['#f43f5e', '#fb7185', '#fda4af', '#ffffff', '#a3a3a3'],
+};
 
 interface TodayPanelProps {
   topics: Topic[];
@@ -14,6 +23,7 @@ interface TodayPanelProps {
 }
 
 export function TodayPanel({ topics, assignments, updating, onToggle, onRecalculate }: TodayPanelProps) {
+  const { confettiEnabled, accentColor } = usePreferences();
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const prevAllTopicsComplete = useRef(false);
 
@@ -35,16 +45,16 @@ export function TodayPanel({ topics, assignments, updating, onToggle, onRecalcul
 
   // Fire confetti on the transition from incomplete → all complete
   useEffect(() => {
-    if (allTopicsComplete && !prevAllTopicsComplete.current) {
+    if (allTopicsComplete && !prevAllTopicsComplete.current && confettiEnabled) {
       confetti({
         particleCount: 120,
         spread: 80,
         origin: { y: 0.5 },
-        colors: ['#F5A623', '#FCD34D', '#FBBF24', '#ffffff', '#a3a3a3'],
+        colors: ACCENT_CONFETTI_COLORS[accentColor],
       });
     }
     prevAllTopicsComplete.current = allTopicsComplete;
-  }, [allTopicsComplete]);
+  }, [allTopicsComplete, confettiEnabled, accentColor]);
   const futureAssignments = assignments.filter((a) => a.assigned_date > todayStr);
   const nextDate = futureAssignments.length > 0
     ? futureAssignments.reduce<string>(

@@ -12,6 +12,214 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200;
+    @apply bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Light mode — semantic variable definitions
+   (html.light class is added by ThemeContext)
+───────────────────────────────────────────────────────────── */
+html.light {
+  --lm-base:         #ffffff;    /* page background  */
+  --lm-surface:      #f4f4f5;    /* cards, panels    */
+  --lm-elevated:     #e4e4e7;    /* hover / elevated */
+  --lm-subtle:       #d4d4d8;    /* deep hover       */
+  --lm-text-0:       #09090b;    /* white → near-black */
+  --lm-text-1:       #18181b;    /* neutral-100      */
+  --lm-text-2:       #27272a;    /* neutral-200      */
+  --lm-text-3:       #3f3f46;    /* neutral-300      */
+  --lm-text-4:       #52525b;    /* neutral-400      */
+  --lm-text-5:       #71717a;    /* neutral-500      */
+  --lm-text-6:       #a1a1aa;    /* neutral-600      */
+  --lm-text-7:       #d4d4d8;    /* neutral-700      */
+  --lm-border-8:     #e4e4e7;    /* border-neutral-800 */
+  --lm-border-7:     #d4d4d8;    /* border-neutral-700 */
+  --lm-border-6:     #c4c4c4;    /* border-neutral-600 */
+}
+
+/* ── Backgrounds ── */
+html.light .bg-neutral-950  { background-color: var(--lm-base); }
+html.light .bg-neutral-900  { background-color: var(--lm-surface); }
+html.light .bg-neutral-800  { background-color: var(--lm-elevated); }
+html.light .bg-neutral-700  { background-color: var(--lm-subtle); }
+
+/* ── Text ── */
+html.light .text-white       { color: var(--lm-text-0); }
+html.light .text-neutral-100 { color: var(--lm-text-1); }
+html.light .text-neutral-200 { color: var(--lm-text-2); }
+html.light .text-neutral-300 { color: var(--lm-text-3); }
+html.light .text-neutral-400 { color: var(--lm-text-4); }
+html.light .text-neutral-500 { color: var(--lm-text-5); }
+html.light .text-neutral-600 { color: var(--lm-text-6); }
+html.light .text-neutral-700 { color: var(--lm-text-7); }
+
+/* ── Borders ── */
+html.light .border-neutral-800 { border-color: var(--lm-border-8); }
+html.light .border-neutral-700 { border-color: var(--lm-border-7); }
+html.light .border-neutral-600 { border-color: var(--lm-border-6); }
+
+/* ── Hover backgrounds ── */
+html.light .hover\:bg-neutral-900:hover { background-color: var(--lm-surface); }
+html.light .hover\:bg-neutral-800:hover { background-color: var(--lm-elevated); }
+html.light .hover\:bg-neutral-700:hover { background-color: var(--lm-subtle); }
+
+/* ── Hover text ── */
+html.light .hover\:text-neutral-200:hover { color: var(--lm-text-2); }
+html.light .hover\:text-neutral-100:hover { color: var(--lm-text-1); }
+html.light .hover\:text-white:hover       { color: var(--lm-text-0); }
+
+/* ── Placeholder text ── */
+html.light .placeholder\:text-neutral-600::placeholder { color: var(--lm-text-5); }
+
+/* ── Shadow overlays (keep dark so shadows read on light bg) ── */
+html.light .shadow-black\/40      { --tw-shadow-color: rgba(0, 0, 0, 0.15); }
+html.light .hover\:shadow-black\/40:hover { --tw-shadow-color: rgba(0, 0, 0, 0.15); }
+
+/* ── Modal / overlay backdrop: keep dark even in light mode ── */
+html.light .bg-black\/60 { background-color: rgba(0, 0, 0, 0.5); }
+
+/* ── Form inputs: ensure readable in light mode ── */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #ffffff;
+  color: #09090b;
+  border-color: var(--lm-border-7);
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: var(--lm-text-5);
+}
+
+/* ── Smooth theme transitions ── */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Don't animate things that shouldn't transition */
+.animate-spin,
+.animate-pulse,
+[class*="animate-"] {
+  transition: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Accent color overrides  (html.accent-{color} added by PreferencesContext)
+   Default accent is amber — no class needed for that.
+   Each non-amber accent remaps the amber palette to the chosen color.
+───────────────────────────────────────────────────────────── */
+
+/* ── Blue accent ── */
+html.accent-blue .bg-amber-500              { background-color: #3b82f6; }
+html.accent-blue .bg-amber-400              { background-color: #60a5fa; }
+html.accent-blue .bg-amber-500\/10          { background-color: rgb(59 130 246 / 0.10); }
+html.accent-blue .bg-amber-500\/15          { background-color: rgb(59 130 246 / 0.15); }
+html.accent-blue .text-amber-500            { color: #3b82f6; }
+html.accent-blue .text-amber-400            { color: #60a5fa; }
+html.accent-blue .text-amber-300            { color: #93c5fd; }
+html.accent-blue .border-amber-500          { border-color: #3b82f6; }
+html.accent-blue .border-amber-500\/30      { border-color: rgb(59 130 246 / 0.30); }
+html.accent-blue .border-amber-500\/40      { border-color: rgb(59 130 246 / 0.40); }
+html.accent-blue .border-amber-500\/50      { border-color: rgb(59 130 246 / 0.50); }
+html.accent-blue .hover\:bg-amber-400:hover { background-color: #60a5fa; }
+html.accent-blue .hover\:bg-amber-500\/10:hover { background-color: rgb(59 130 246 / 0.10); }
+html.accent-blue .hover\:text-amber-400:hover   { color: #60a5fa; }
+html.accent-blue .hover\:border-amber-500:hover { border-color: #3b82f6; }
+html.accent-blue .focus\:ring-amber-500:focus   { --tw-ring-color: #3b82f6; }
+html.accent-blue .accent-amber-500          { accent-color: #3b82f6; }
+html.accent-blue .shadow-amber-900\/20      { --tw-shadow-color: rgb(30 58 138 / 0.20); }
+
+/* ── Violet accent ── */
+html.accent-violet .bg-amber-500              { background-color: #8b5cf6; }
+html.accent-violet .bg-amber-400              { background-color: #a78bfa; }
+html.accent-violet .bg-amber-500\/10          { background-color: rgb(139 92 246 / 0.10); }
+html.accent-violet .bg-amber-500\/15          { background-color: rgb(139 92 246 / 0.15); }
+html.accent-violet .text-amber-500            { color: #8b5cf6; }
+html.accent-violet .text-amber-400            { color: #a78bfa; }
+html.accent-violet .text-amber-300            { color: #c4b5fd; }
+html.accent-violet .border-amber-500          { border-color: #8b5cf6; }
+html.accent-violet .border-amber-500\/30      { border-color: rgb(139 92 246 / 0.30); }
+html.accent-violet .border-amber-500\/40      { border-color: rgb(139 92 246 / 0.40); }
+html.accent-violet .border-amber-500\/50      { border-color: rgb(139 92 246 / 0.50); }
+html.accent-violet .hover\:bg-amber-400:hover { background-color: #a78bfa; }
+html.accent-violet .hover\:bg-amber-500\/10:hover { background-color: rgb(139 92 246 / 0.10); }
+html.accent-violet .hover\:text-amber-400:hover   { color: #a78bfa; }
+html.accent-violet .hover\:border-amber-500:hover { border-color: #8b5cf6; }
+html.accent-violet .focus\:ring-amber-500:focus   { --tw-ring-color: #8b5cf6; }
+html.accent-violet .accent-amber-500          { accent-color: #8b5cf6; }
+html.accent-violet .shadow-amber-900\/20      { --tw-shadow-color: rgb(76 29 149 / 0.20); }
+
+/* ── Emerald accent ── */
+html.accent-emerald .bg-amber-500              { background-color: #10b981; }
+html.accent-emerald .bg-amber-400              { background-color: #34d399; }
+html.accent-emerald .bg-amber-500\/10          { background-color: rgb(16 185 129 / 0.10); }
+html.accent-emerald .bg-amber-500\/15          { background-color: rgb(16 185 129 / 0.15); }
+html.accent-emerald .text-amber-500            { color: #10b981; }
+html.accent-emerald .text-amber-400            { color: #34d399; }
+html.accent-emerald .text-amber-300            { color: #6ee7b7; }
+html.accent-emerald .border-amber-500          { border-color: #10b981; }
+html.accent-emerald .border-amber-500\/30      { border-color: rgb(16 185 129 / 0.30); }
+html.accent-emerald .border-amber-500\/40      { border-color: rgb(16 185 129 / 0.40); }
+html.accent-emerald .border-amber-500\/50      { border-color: rgb(16 185 129 / 0.50); }
+html.accent-emerald .hover\:bg-amber-400:hover { background-color: #34d399; }
+html.accent-emerald .hover\:bg-amber-500\/10:hover { background-color: rgb(16 185 129 / 0.10); }
+html.accent-emerald .hover\:text-amber-400:hover   { color: #34d399; }
+html.accent-emerald .hover\:border-amber-500:hover { border-color: #10b981; }
+html.accent-emerald .focus\:ring-amber-500:focus   { --tw-ring-color: #10b981; }
+html.accent-emerald .accent-amber-500          { accent-color: #10b981; }
+html.accent-emerald .shadow-amber-900\/20      { --tw-shadow-color: rgb(6 78 59 / 0.20); }
+
+/* ── Rose accent ── */
+html.accent-rose .bg-amber-500              { background-color: #f43f5e; }
+html.accent-rose .bg-amber-400              { background-color: #fb7185; }
+html.accent-rose .bg-amber-500\/10          { background-color: rgb(244 63 94 / 0.10); }
+html.accent-rose .bg-amber-500\/15          { background-color: rgb(244 63 94 / 0.15); }
+html.accent-rose .text-amber-500            { color: #f43f5e; }
+html.accent-rose .text-amber-400            { color: #fb7185; }
+html.accent-rose .text-amber-300            { color: #fda4af; }
+html.accent-rose .border-amber-500          { border-color: #f43f5e; }
+html.accent-rose .border-amber-500\/30      { border-color: rgb(244 63 94 / 0.30); }
+html.accent-rose .border-amber-500\/40      { border-color: rgb(244 63 94 / 0.40); }
+html.accent-rose .border-amber-500\/50      { border-color: rgb(244 63 94 / 0.50); }
+html.accent-rose .hover\:bg-amber-400:hover { background-color: #fb7185; }
+html.accent-rose .hover\:bg-amber-500\/10:hover { background-color: rgb(244 63 94 / 0.10); }
+html.accent-rose .hover\:text-amber-400:hover   { color: #fb7185; }
+html.accent-rose .hover\:border-amber-500:hover { border-color: #f43f5e; }
+html.accent-rose .focus\:ring-amber-500:focus   { --tw-ring-color: #f43f5e; }
+html.accent-rose .accent-amber-500          { accent-color: #f43f5e; }
+html.accent-rose .shadow-amber-900\/20      { --tw-shadow-color: rgb(136 19 55 / 0.20); }
+
+/* ─────────────────────────────────────────────────────────────
+   Compact mode  (html.compact class added by PreferencesContext)
+   Reduces padding and spacing for denser layout.
+───────────────────────────────────────────────────────────── */
+html.compact .p-5  { padding: 0.875rem; }
+html.compact .p-6  { padding: 1rem; }
+html.compact .p-8  { padding: 1.25rem; }
+html.compact .p-12 { padding: 1.5rem; }
+html.compact .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
+html.compact .px-6 { padding-left: 1rem;    padding-right: 1rem; }
+html.compact .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+html.compact .py-3 { padding-top: 0.5rem;   padding-bottom: 0.5rem; }
+html.compact .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+html.compact .py-8 { padding-top: 1.25rem;  padding-bottom: 1.25rem; }
+html.compact .py-12{ padding-top: 1.5rem;   padding-bottom: 1.5rem; }
+html.compact .gap-4 { gap: 0.75rem; }
+html.compact .gap-6 { gap: 1rem; }
+html.compact .gap-8 { gap: 1.25rem; }
+html.compact .mb-4 { margin-bottom: 0.625rem; }
+html.compact .mb-6 { margin-bottom: 1rem; }
+html.compact .mb-8 { margin-bottom: 1.25rem; }
+html.compact .mt-8 { margin-top: 1.25rem; }
+html.compact .space-y-6 > * + * { margin-top: 1rem; }
+html.compact .space-y-4 > * + * { margin-top: 0.625rem; }
+html.compact .text-2xl { font-size: 1.25rem; line-height: 1.5rem; }
+html.compact .text-xl  { font-size: 1.05rem; line-height: 1.4rem; }
+html.compact .rounded-2xl { border-radius: 0.75rem; }
+html.compact .rounded-xl  { border-radius: 0.625rem; }

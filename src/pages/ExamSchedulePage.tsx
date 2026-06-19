@@ -14,6 +14,7 @@ import {
   recalculateSchedule,
   resetSchedule,
   deleteExam,
+  renameExam,
 } from '../lib/examService';
 import {
   ArrowLeft,
@@ -33,6 +34,7 @@ import {
   Clock,
   Target,
   BarChart3,
+  Pencil,
 } from 'lucide-react';
 import { format, parseISO, differenceInDays, differenceInCalendarDays, isBefore, startOfDay, addDays } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -324,6 +326,8 @@ export function ExamSchedulePage() {
     { assignmentId: string; fromDate: string; toDate: string }[]
   >([]);
   const [scheduleBehind, setScheduleBehind] = useState(false);
+  const [isRenamingExam, setIsRenamingExam] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     if (examId) {
@@ -597,6 +601,25 @@ export function ExamSchedulePage() {
     }
   };
 
+  const startExamRename = () => {
+    if (!data) return;
+    setRenameValue(data.exam.name);
+    setIsRenamingExam(true);
+  };
+
+  const commitExamRename = async () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== data?.exam.name && examId) {
+      try {
+        await renameExam(examId, trimmed);
+        setData(prev => prev ? { ...prev, exam: { ...prev.exam, name: trimmed } } : prev);
+      } catch {
+        setError('Failed to rename study plan.');
+      }
+    }
+    setIsRenamingExam(false);
+  };
+
   const handleDelete = async () => {
     if (!examId || !data || !confirm(`Delete "${data.exam.name}"? This cannot be undone.`)) return;
     try {
@@ -789,9 +812,9 @@ export function ExamSchedulePage() {
     : 0;
 
   const totalDays = differenceInCalendarDays(new Date(data.exam.exam_date), new Date(data.exam.created_at));
-  // Use max(1, ...) so on the very first calendar day expected progress is 1/N, not 0%
-  // (avoids showing "Ahead" just because you did today's assigned work)
-  const daysElapsed = Math.max(1, differenceInCalendarDays(new Date(), new Date(data.exam.created_at)));
+  // Day 0 (creation day): expected progress is 0% — the student hasn't had time yet.
+  // max(0, ...) prevents showing "Behind" immediately on the day the plan is created.
+  const daysElapsed = Math.max(0, differenceInCalendarDays(new Date(), new Date(data.exam.created_at)));
   const status = calculateStatus(progressPercentage, daysElapsed, totalDays);
 
   const expectedProgress = totalDays > 0 ? (daysElapsed / totalDays) * 100 : 0;
@@ -869,6 +892,30 @@ export function ExamSchedulePage() {
                 <ArrowLeft className="w-5 h-5" />
                 <span className="text-sm">Back</span>
               </button>
+
+              {/* Exam rename inline */}
+              {isRenamingExam ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onBlur={commitExamRename}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitExamRename();
+                    if (e.key === 'Escape') setIsRenamingExam(false);
+                  }}
+                  className="text-sm font-medium bg-neutral-800 text-white rounded-md px-2 py-1 border border-amber-500 outline-none w-48 focus:ring-1 focus:ring-amber-500"
+                />
+              ) : (
+                <button
+                  onClick={startExamRename}
+                  className="flex items-center gap-1.5 text-neutral-500 hover:text-amber-400 transition text-sm"
+                  title="Rename study plan"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Rename
+                </button>
+              )}
 
               <button
                 onClick={() => {

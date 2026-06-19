@@ -98,6 +98,14 @@ export async function createExam(data: {
   }
 }
 
+export async function renameExam(examId: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('exams')
+    .update({ name: name.trim() })
+    .eq('id', examId);
+  if (error) throw error;
+}
+
 // Get all exams for the current user
 export async function getExams(): Promise<Exam[]> {
   const { data, error } = await supabase
@@ -115,6 +123,9 @@ export interface ExamProgress {
   completedAssignments: number;
   currentPhase: 'learning' | 'revision' | 'complete';
   progressPercent: number;
+  revisionTotal: number;
+  revisionCompleted: number;
+  revisionPercent: number;
 }
 
 type RawAssignment = { id: string; is_completed: boolean; phase: string; assigned_date: string };
@@ -136,12 +147,17 @@ export async function getExamsWithProgress(): Promise<ExamProgress[]> {
   return (data as RawExamRow[]).map((row) => {
     const assignments: RawAssignment[] = row.scheduled_assignments ?? [];
 
-    // Progress is learning-phase only — revision is tracked separately.
-    // Counting both phases inflated progress to 50% even when all topics were learned.
+    // Learning phase progress
     const learningAssignments = assignments.filter((a) => a.phase === 'learning');
     const total = learningAssignments.length;
     const completed = learningAssignments.filter((a) => a.is_completed).length;
     const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // Revision phase progress
+    const revisionAssignments = assignments.filter((a) => a.phase === 'revision');
+    const revisionTotal = revisionAssignments.length;
+    const revisionCompleted = revisionAssignments.filter((a) => a.is_completed).length;
+    const revisionPercent = revisionTotal > 0 ? Math.round((revisionCompleted / revisionTotal) * 100) : 0;
 
     // Determine current phase from today's schedule
     const todayAssignments = assignments.filter((a) => a.assigned_date === today);
@@ -164,7 +180,7 @@ export async function getExamsWithProgress(): Promise<ExamProgress[]> {
     }
 
     const { scheduled_assignments: _dropped, ...exam } = row;
-    return { exam: exam as Exam, totalAssignments: total, completedAssignments: completed, currentPhase, progressPercent };
+    return { exam: exam as Exam, totalAssignments: total, completedAssignments: completed, currentPhase, progressPercent, revisionTotal, revisionCompleted, revisionPercent };
   });
 }
 

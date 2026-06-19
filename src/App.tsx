@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { PreferencesProvider } from './contexts/PreferencesContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import { AuthForm } from './components/Auth';
 import { HomePage } from './pages/HomePage';
@@ -11,6 +13,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 function App() {
   return (
     <ErrorBoundary>
+      <ThemeProvider>
+      <PreferencesProvider>
       <AuthProvider>
         <BrowserRouter>
           <KeyboardShortcutsProvider>
@@ -45,6 +49,8 @@ function App() {
           </KeyboardShortcutsProvider>
         </BrowserRouter>
       </AuthProvider>
+      </PreferencesProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
