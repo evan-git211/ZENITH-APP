@@ -1,65 +1,146 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '../components/Header';
-import { TodoTab } from '../components/TodoTab';
 import {
-  Plus, Calendar, CheckSquare, Flag, BookOpen, Clock,
-  Trash2, Loader2, Check, X, Pencil,
+  Plus, Calendar, CheckSquare, Flag, BookOpen, Clock, Trash2,
+  Loader2, Pause, Check, X, Timer, RotateCcw, AlarmClock,
 } from 'lucide-react';
-import { getExamsWithProgress, deleteExam, renameExam, type ExamProgress } from '../lib/examService';
+import { useNavigate } from 'react-router-dom';
+import { getExams, deleteExam } from '../lib/examService';
+import { getTodos, createTodo, updateTodo, deleteTodo, type Todo } from '../lib/todoService';
 import { getMilestones, createMilestone, deleteMilestone, type Milestone } from '../lib/milestoneService';
-import { getTodayTopicsCompleted } from '../lib/streakService';
-import { format, differenceInCalendarDays, parseISO } from 'date-fns';
-import { useAuth } from '../contexts/AuthContext';
-import { usePreferences } from '../contexts/PreferencesContext';
-
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-function getFirstName(displayName: string | undefined, email: string | undefined): string {
-  if (displayName?.trim()) return displayName.trim().split(/\s+/)[0];
-  const prefix = email?.split('@')[0] ?? '';
-  return prefix.charAt(0).toUpperCase() + prefix.slice(1);
-}
+import { format, differenceInDays, parseISO } from 'date-fns';
+import type { Exam } from '../types/database';
 
 type Tab = 'plans' | 'todos' | 'milestones';
 
+// Preset timer durations in minutes
+const TIMER_PRESETS = [1, 2, 5, 10, 15, 20, 25, 30, 45, 60];
+
+// Sound utilities
+function playCompletionBeep() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch {}
+}
+
+function playAlarmSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const totalDuration = 5;
+
+    // Fire 5 bursts across 5 seconds
+    for (let i = 0; i < 10; i++) {
+      const t = ctx.currentTime + i * 0.5;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      // Alternating high-low tones for alarm effect
+      osc.frequency.value = i % 2 === 0 ? 1200 : 900;
+      osc.type = 'square';
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.4, t + 0.05);
+      gain.gain.setValueAtTime(0.4, t + 0.35);
+      gain.gain.linearRampToValueAtTime(0, t + 0.45);
+      osc.start(t);
+      osc.stop(t + 0.45);
+    }
+  } catch {}
+}
+
 export function HomePage() {
-  const { user } = useAuth();
-  const { dailyGoal, fmtDate } = usePreferences();
   const [activeTab, setActiveTab] = useState<Tab>('plans');
-  const [exams, setExams] = useState<ExamProgress[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [todayCompleted, setTodayCompleted] = useState(0);
   const navigate = useNavigate();
 
+  // Todo form state
+  const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [showTodoForm, setShowTodoForm] = useState(false);
+
+  // Timer state
+  const [activeTimerTodoId, setActiveTimerTodoId] = useState<string | null>(null);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(0);
+  const [timerDurationSeconds, setTimerDurationSeconds] = useState(0);
+  const [timerExpired, setTimerExpired] = useState(false);
+  const [showTimerPicker, setShowTimerPicker] = useState<string | null>(null); // todoId
+  const [customMinutes, setCustomMinutes] = useState('');
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Milestone state
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
 
   useEffect(() => {
     loadExams();
+    loadTodos();
     loadMilestones();
-    getTodayTopicsCompleted().then(setTodayCompleted).catch(() => {});
   }, []);
+
+  // Countdown tick
+  useEffect(() => {
+    if (activeTimerTodoId && timerSecondsLeft > 0 && !timerExpired) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimerSecondsLeft((s) => {
+          if (s <= 1) {
+            // Timer hit zero
+            clearInterval(timerIntervalRef.current!);
+            timerIntervalRef.current = null;
+            setTimerExpired(true);
+            playAlarmSound();
+            // Stop alarm after 5 s
+            alarmIntervalRef.current = setTimeout(() => {
+              setTimerExpired(false);
+            }, 5000) as unknown as ReturnType<typeof setInterval>;
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+  }, [activeTimerTodoId, timerExpired]);
 
   const loadExams = async () => {
     try {
-      setLoading(true);
-      const data = await getExamsWithProgress();
+      const data = await getExams();
       setExams(data);
     } catch (err) {
       console.error('Failed to load exams:', err);
-      setError('Failed to load study plans.');
+    }
+  };
+
+  const loadTodos = async () => {
+    try {
+      setLoading(true);
+      const data = await getTodos();
+      setTodos(data);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load todos:', err);
+      setError('Failed to load todos');
     } finally {
       setLoading(false);
     }
@@ -74,33 +155,12 @@ export function HomePage() {
     }
   };
 
-  const startRename = (e: React.MouseEvent, examId: string, currentName: string) => {
-    e.stopPropagation();
-    setRenamingId(examId);
-    setRenameValue(currentName);
-  };
-
-  const commitRename = async (examId: string) => {
-    const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== exams.find(e => e.exam.id === examId)?.exam.name) {
-      try {
-        await renameExam(examId, trimmed);
-        setExams(prev =>
-          prev.map(e => e.exam.id === examId ? { ...e, exam: { ...e.exam, name: trimmed } } : e)
-        );
-      } catch {
-        setError('Failed to rename study plan.');
-      }
-    }
-    setRenamingId(null);
-  };
-
   const handleDeleteExam = async (examId: string, examName: string) => {
     if (!confirm(`Delete "${examName}"? This cannot be undone.`)) return;
     try {
       setDeletingId(examId);
       await deleteExam(examId);
-      setExams((prev) => prev.filter((e) => e.exam.id !== examId));
+      setExams(exams.filter((e) => e.id !== examId));
     } catch (err) {
       console.error('Failed to delete exam:', err);
       setError('Failed to delete study plan');
@@ -109,6 +169,93 @@ export function HomePage() {
     }
   };
 
+  const handleAddTodo = async () => {
+    if (!newTodoTitle.trim()) return;
+    try {
+      const todo = await createTodo(newTodoTitle.trim());
+      setTodos([todo, ...todos]);
+      setNewTodoTitle('');
+      setShowTodoForm(false);
+    } catch (err) {
+      console.error('Failed to create todo:', err);
+      setError('Failed to create todo');
+    }
+  };
+
+  const handleToggleTodo = useCallback(async (id: string, completed: boolean) => {
+    try {
+      const updated = await updateTodo(id, { is_completed: !completed });
+      setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      if (!completed) playCompletionBeep();
+    } catch (err) {
+      console.error('Failed to update todo:', err);
+    }
+  }, []);
+
+  const handleDeleteTodo = async (id: string) => {
+    if (activeTimerTodoId === id) handleStopTimer();
+    if (!confirm('Delete this to-do?')) return;
+    try {
+      await deleteTodo(id);
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error('Failed to delete todo:', err);
+    }
+  };
+
+  // Start countdown with a chosen number of minutes
+  const handleStartTimer = useCallback((todoId: string, minutes: number) => {
+    const secs = minutes * 60;
+    setActiveTimerTodoId(todoId);
+    setTimerSecondsLeft(secs);
+    setTimerDurationSeconds(secs);
+    setTimerExpired(false);
+    setShowTimerPicker(null);
+    setCustomMinutes('');
+  }, []);
+
+  const handleStopTimer = useCallback(async () => {
+    if (!activeTimerTodoId) return;
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (alarmIntervalRef.current) {
+      clearTimeout(alarmIntervalRef.current as unknown as ReturnType<typeof setTimeout>);
+      alarmIntervalRef.current = null;
+    }
+
+    const elapsedSecs = timerDurationSeconds - timerSecondsLeft;
+    if (elapsedSecs > 0) {
+      const todo = todos.find((t) => t.id === activeTimerTodoId);
+      if (todo) {
+        const newMinutes = (todo.timer_minutes || 0) + Math.floor(elapsedSecs / 60);
+        try {
+          const updated = await updateTodo(activeTimerTodoId, { timer_minutes: newMinutes });
+          setTodos((prev) => prev.map((t) => (t.id === activeTimerTodoId ? updated : t)));
+        } catch (err) {
+          console.error('Failed to save timer:', err);
+        }
+      }
+    }
+    setActiveTimerTodoId(null);
+    setTimerSecondsLeft(0);
+    setTimerDurationSeconds(0);
+    setTimerExpired(false);
+  }, [activeTimerTodoId, timerDurationSeconds, timerSecondsLeft, todos]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const timerProgressPercent = timerDurationSeconds > 0
+    ? ((timerDurationSeconds - timerSecondsLeft) / timerDurationSeconds) * 100
+    : 0;
+
+  // Milestone handlers
   const handleAddMilestone = async () => {
     if (!newMilestoneTitle.trim() || !newMilestoneDate) return;
     try {
@@ -141,70 +288,12 @@ export function HomePage() {
     { id: 'milestones' as const, label: 'Milestones', icon: Flag },
   ];
 
-  const firstName = getFirstName(
-    user?.user_metadata?.display_name as string | undefined,
-    user?.email
-  );
-
-  const upcomingExams = exams
-    .filter(({ exam }) => differenceInCalendarDays(new Date(exam.exam_date), new Date()) >= 0)
-    .sort((a, b) =>
-      differenceInCalendarDays(new Date(a.exam.exam_date), new Date()) -
-      differenceInCalendarDays(new Date(b.exam.exam_date), new Date())
-    );
-
-  const closestExam = upcomingExams[0];
-  const daysToClosest = closestExam
-    ? differenceInCalendarDays(new Date(closestExam.exam.exam_date), new Date())
-    : null;
-
-  let contextLine: string;
-  if (loading) {
-    contextLine = '';
-  } else if (upcomingExams.length === 0) {
-    contextLine = "No upcoming exams — ready to create your first study plan?";
-  } else if (daysToClosest === 0) {
-    contextLine = `Today is exam day for ${closestExam.exam.name}. Good luck!`;
-  } else {
-    const plural = upcomingExams.length === 1 ? '1 upcoming exam' : `${upcomingExams.length} upcoming exams`;
-    contextLine = `You have ${plural}. Your closest is ${closestExam.exam.name} in ${daysToClosest}d.`;
-  }
-
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900" onClick={() => setShowTimerPicker(null)}>
       <Header />
 
-      {/* Greeting banner */}
-      <div className="bg-neutral-950 border-b border-neutral-800/60 px-4 py-4">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-lg font-semibold text-white">
-            {getGreeting()}, {firstName}!
-          </p>
-          {contextLine && (
-            <p className="text-sm text-neutral-400 mt-0.5">{contextLine}</p>
-          )}
-          {dailyGoal > 0 && (
-            <div className="mt-2 flex items-center gap-3">
-              <div className="flex-1 max-w-xs h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (todayCompleted / dailyGoal) * 100)}%` }}
-                />
-              </div>
-              <span className="text-xs text-neutral-500">
-                <span className={todayCompleted >= dailyGoal ? 'text-amber-400 font-semibold' : 'text-neutral-300'}>
-                  {todayCompleted}
-                </span>
-                /{dailyGoal} topics today
-                {todayCompleted >= dailyGoal && ' ✓'}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Tab Navigation */}
-      <div className="bg-neutral-900 border-b border-neutral-800">
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1 overflow-x-auto">
             {tabs.map((tab) => {
@@ -216,8 +305,8 @@ export function HomePage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
                     isActive
-                      ? 'border-amber-500 text-amber-500'
-                      : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                      ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -229,10 +318,11 @@ export function HomePage() {
         </div>
       </div>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-800">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         )}
 
@@ -240,10 +330,10 @@ export function HomePage() {
         {activeTab === 'plans' && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Your Study Plans</h2>
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Your Study Plans</h2>
               <button
                 onClick={() => navigate('/new')}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-900 font-semibold transition"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition"
               >
                 <Plus className="w-5 h-5" />
                 New Plan
@@ -252,19 +342,19 @@ export function HomePage() {
 
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
               </div>
             ) : exams.length === 0 ? (
               <div className="text-center py-12">
-                <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-12 max-w-md mx-auto">
-                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="w-8 h-8 text-amber-500" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 max-w-md mx-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                    <Calendar className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">No study plans yet</h3>
-                  <p className="text-neutral-400 mb-6">Create your first study plan and start preparing for your exams</p>
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">No study plans yet</h3>
+                  <p className="text-slate-500 dark:text-slate-400 mb-6">Create your first study plan and start preparing for your exams</p>
                   <button
                     onClick={() => navigate('/new')}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-900 font-semibold transition"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition"
                   >
                     <Plus className="w-5 h-5" />
                     Create Study Plan
@@ -273,139 +363,34 @@ export function HomePage() {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {exams.map(({ exam, totalAssignments, completedAssignments, currentPhase, progressPercent, revisionTotal, revisionCompleted, revisionPercent }) => {
-                  const daysRemaining = differenceInCalendarDays(new Date(exam.exam_date), new Date());
+                {exams.map((exam) => {
+                  const daysRemaining = differenceInDays(new Date(exam.exam_date), new Date());
                   const isPast = daysRemaining < 0;
-                  const remaining = totalAssignments - completedAssignments;
-
-                  const totalDays = differenceInCalendarDays(new Date(exam.exam_date), new Date(exam.created_at));
-                  const daysElapsed = differenceInCalendarDays(new Date(), new Date(exam.created_at));
-                  const expectedPercent = totalDays > 0 ? (daysElapsed / totalDays) * 100 : 0;
-                  const diff = progressPercent - expectedPercent;
-                  const statusColor = isPast || currentPhase === 'complete'
-                    ? 'text-neutral-500'
-                    : diff >= -5 ? 'text-emerald-400'
-                    : diff >= -15 ? 'text-amber-400'
-                    : 'text-red-400';
-                  const statusLabel = currentPhase === 'complete'
-                    ? 'Complete'
-                    : isPast ? 'Past due'
-                    : diff >= -5 ? 'On track'
-                    : diff >= -15 ? 'Slightly behind'
-                    : 'Behind';
-
                   return (
                     <div
                       key={exam.id}
-                      className={`bg-neutral-900 rounded-xl border border-neutral-800 hover:shadow-lg hover:shadow-black/40 transition cursor-pointer group flex flex-col ${isPast && currentPhase !== 'complete' ? 'opacity-60' : ''}`}
+                      className={`bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:shadow-lg transition cursor-pointer group ${isPast ? 'opacity-60' : ''}`}
                       onClick={() => navigate(`/exam/${exam.id}`)}
                     >
-                      <div className="p-5 flex-1">
-                        <div className="flex items-start justify-between mb-3 gap-2">
-                          {renamingId === exam.id ? (
-                            <input
-                              autoFocus
-                              value={renameValue}
-                              onChange={e => setRenameValue(e.target.value)}
-                              onBlur={() => commitRename(exam.id)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') commitRename(exam.id);
-                                if (e.key === 'Escape') setRenamingId(null);
-                              }}
-                              onClick={e => e.stopPropagation()}
-                              className="flex-1 text-sm font-semibold bg-neutral-800 text-white rounded-md px-2 py-1 border border-amber-500 outline-none focus:ring-1 focus:ring-amber-500 min-w-0"
-                            />
-                          ) : (
-                            <h3 className="font-semibold text-white line-clamp-2 leading-snug">{exam.name}</h3>
-                          )}
-                          <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
-                            <button
-                              onClick={(e) => startRename(e, exam.id, exam.name)}
-                              className="p-1.5 rounded-lg text-neutral-500 hover:text-amber-400 hover:bg-amber-500/10 transition"
-                              title="Rename"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteExam(exam.id, exam.name); }}
-                              disabled={deletingId === exam.id}
-                              className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-900/20 transition disabled:opacity-50"
-                            >
-                              {deletingId === exam.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 text-sm mb-4 flex-wrap">
-                          <div className="flex items-center gap-1.5 text-neutral-400">
-                            <Calendar className="w-3.5 h-3.5" />
-                            {fmtDate(exam.exam_date)}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                            {isPast
-                              ? <span className="text-red-400">Past due</span>
-                              : daysRemaining === 0
-                              ? <span className="text-amber-500">Today!</span>
-                              : <span className="text-neutral-400">{daysRemaining}d left</span>}
-                          </div>
-                        </div>
-
-                        <div className="flex items-end justify-between mb-3">
-                          <div>
-                            <span className="text-2xl font-bold text-white tabular-nums">{progressPercent}%</span>
-                            <span className="text-xs text-neutral-500 ml-1.5">
-                              {completedAssignments}/{totalAssignments} learned
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
-                            {currentPhase !== 'complete' && remaining > 0 && (
-                              <p className="text-xs text-neutral-600">{remaining} remaining</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Learning phase bar */}
-                        <div className="mb-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-neutral-500">Learning</span>
-                            <span className="text-xs text-neutral-500">{completedAssignments}/{totalAssignments}</span>
-                          </div>
-                          <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${currentPhase === 'complete' ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                              style={{ width: `${progressPercent}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Revision phase bar — only if revision assignments exist */}
-                        {revisionTotal > 0 && (
-                          <div className="mt-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-neutral-500">Revision</span>
-                              <span className="text-xs text-neutral-500">{revisionCompleted}/{revisionTotal}</span>
-                            </div>
-                            <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all bg-blue-500"
-                                style={{ width: `${revisionPercent}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-100 line-clamp-1">{exam.name}</h3>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteExam(exam.id, exam.name); }}
+                          disabled={deletingId === exam.id}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                        >
+                          {deletingId === exam.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
                       </div>
-
-                      <div className="px-5 py-2.5 border-t border-neutral-800 flex items-center justify-between">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          currentPhase === 'complete' ? 'bg-emerald-500/10 text-emerald-400'
-                          : currentPhase === 'revision' ? 'bg-blue-500/10 text-blue-400'
-                          : 'bg-orange-900/30 text-orange-400'
-                        }`}>
-                          {currentPhase === 'complete' ? 'Complete' : currentPhase === 'revision' ? 'Revision phase' : 'Learning phase'}
-                        </span>
-                        <BookOpen className="w-3.5 h-3.5 text-neutral-600" />
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                          <Calendar className="w-4 h-4" />
+                          {format(new Date(exam.exam_date), 'MMM d, yyyy')}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          {isPast ? <span className="text-red-500">Past due</span> : daysRemaining === 0 ? <span className="text-amber-500">Today!</span> : <span className="text-slate-500 dark:text-slate-400">{daysRemaining}d left</span>}
+                        </div>
                       </div>
                     </div>
                   );
@@ -416,16 +401,217 @@ export function HomePage() {
         )}
 
         {/* ── To-Do Tab ── */}
-        {activeTab === 'todos' && <TodoTab />}
+        {activeTab === 'todos' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">To-Do List</h2>
+              <button
+                onClick={() => setShowTodoForm(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium transition"
+              >
+                <Plus className="w-5 h-5" />
+                Add To-Do
+              </button>
+            </div>
+
+            {/* Active Countdown Banner */}
+            {activeTimerTodoId && (
+              <div className={`mb-4 p-4 rounded-xl border transition-all ${
+                timerExpired
+                  ? 'bg-red-50 dark:bg-red-900/30 border-red-400 dark:border-red-600 animate-pulse'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${timerExpired ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`} />
+                    <div>
+                      <span className={`font-semibold ${timerExpired ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                        {timerExpired ? 'Time\'s up!' : todos.find((t) => t.id === activeTimerTodoId)?.title}
+                      </span>
+                      {!timerExpired && (
+                        <div className="mt-1 h-1.5 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden w-40">
+                          <div
+                            className="h-full bg-blue-500 transition-all duration-1000"
+                            style={{ width: `${timerProgressPercent}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {timerExpired ? (
+                      <div className="flex items-center gap-2">
+                        <AlarmClock className="w-6 h-6 text-red-500 animate-bounce" />
+                        <span className="text-xl font-bold text-red-600 dark:text-red-400">00:00</span>
+                      </div>
+                    ) : (
+                      <span className="text-2xl font-mono font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                        {formatCountdown(timerSecondsLeft)}
+                      </span>
+                    )}
+                    <button
+                      onClick={handleStopTimer}
+                      className={`p-2 rounded-lg text-white ${timerExpired ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    >
+                      {timerExpired ? <RotateCcw className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Add Todo Form */}
+            {showTodoForm && (
+              <div className="mb-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={newTodoTitle}
+                    onChange={(e) => setNewTodoTitle(e.target.value)}
+                    placeholder="What do you need to do?"
+                    className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddTodo(); if (e.key === 'Escape') setShowTodoForm(false); }}
+                  />
+                  <button onClick={handleAddTodo} className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">
+                    <Check className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => { setShowTodoForm(false); setNewTodoTitle(''); }} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Todo List */}
+            {todos.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 max-w-md mx-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+                    <CheckSquare className="w-8 h-8 text-blue-500 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">No to-dos yet</h3>
+                  <p className="text-slate-500 dark:text-slate-400 mb-6">Add your first to-do and stay organized</p>
+                  <button onClick={() => setShowTodoForm(true)} className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium transition">
+                    <Plus className="w-5 h-5" />
+                    Add To-Do
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {todos.map((todo) => (
+                  <div
+                    key={todo.id}
+                    className={`flex items-center gap-3 p-4 rounded-xl bg-white dark:bg-slate-800 border transition group ${
+                      activeTimerTodoId === todo.id
+                        ? 'border-blue-400 dark:border-blue-600 shadow-md shadow-blue-100 dark:shadow-blue-900/20'
+                        : 'border-slate-200 dark:border-slate-700'
+                    } ${todo.is_completed ? 'opacity-60' : ''}`}
+                  >
+                    {/* Completion toggle */}
+                    <button
+                      onClick={() => handleToggleTodo(todo.id, todo.is_completed)}
+                      className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        todo.is_completed
+                          ? 'bg-emerald-500 border-emerald-500 text-white scale-110'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:scale-105'
+                      }`}
+                    >
+                      {todo.is_completed && <Check className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {/* Title and time logged */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium truncate ${todo.is_completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}`}>
+                        {todo.title}
+                      </p>
+                      {todo.timer_minutes != null && todo.timer_minutes > 0 && (
+                        <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          {todo.timer_minutes >= 60
+                            ? `${Math.floor(todo.timer_minutes / 60)}h ${todo.timer_minutes % 60}m logged`
+                            : `${todo.timer_minutes} min logged`}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Timer icon or current status */}
+                    {!todo.is_completed && activeTimerTodoId !== todo.id && (
+                      <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          disabled={activeTimerTodoId !== null}
+                          onClick={() => setShowTimerPicker(showTimerPicker === todo.id ? null : todo.id)}
+                          className="p-2 rounded-lg text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 opacity-0 group-hover:opacity-100 transition disabled:opacity-30"
+                          title="Set timer"
+                        >
+                          <Timer className="w-5 h-5" />
+                        </button>
+
+                        {/* Duration picker dropdown */}
+                        {showTimerPicker === todo.id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 w-64"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Choose duration</p>
+                            <div className="grid grid-cols-4 gap-1.5 mb-3">
+                              {TIMER_PRESETS.map((min) => (
+                                <button
+                                  key={min}
+                                  onClick={() => handleStartTimer(todo.id, min)}
+                                  className="py-1.5 rounded-lg text-sm font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
+                                >
+                                  {min}m
+                                </button>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                min={1}
+                                max={180}
+                                value={customMinutes}
+                                onChange={(e) => setCustomMinutes(e.target.value)}
+                                placeholder="Custom min"
+                                className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                onKeyDown={(e) => { if (e.key === 'Enter' && customMinutes) handleStartTimer(todo.id, parseInt(customMinutes)); }}
+                              />
+                              <button
+                                onClick={() => customMinutes && handleStartTimer(todo.id, parseInt(customMinutes))}
+                                className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm hover:bg-blue-600 disabled:opacity-50"
+                                disabled={!customMinutes}
+                              >
+                                Go
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDeleteTodo(todo.id)}
+                      className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Milestones Tab ── */}
         {activeTab === 'milestones' && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Milestones</h2>
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Milestones</h2>
               <button
                 onClick={() => setShowMilestoneForm(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-900 font-semibold transition"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition"
               >
                 <Plus className="w-5 h-5" />
                 Add Milestone
@@ -433,14 +619,14 @@ export function HomePage() {
             </div>
 
             {showMilestoneForm && (
-              <div className="mb-4 p-4 rounded-xl bg-neutral-900 border border-neutral-800">
+              <div className="mb-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <div className="flex gap-3 flex-wrap">
                   <input
                     type="text"
                     value={newMilestoneTitle}
                     onChange={(e) => setNewMilestoneTitle(e.target.value)}
                     placeholder="Milestone name"
-                    className="flex-1 min-w-48 px-4 py-2 rounded-lg border border-neutral-700 bg-neutral-950 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-neutral-600"
+                    className="flex-1 min-w-48 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     autoFocus
                     onKeyDown={(e) => { if (e.key === 'Enter') handleAddMilestone(); if (e.key === 'Escape') setShowMilestoneForm(false); }}
                   />
@@ -449,12 +635,12 @@ export function HomePage() {
                     value={newMilestoneDate}
                     onChange={(e) => setNewMilestoneDate(e.target.value)}
                     min={format(new Date(), 'yyyy-MM-dd')}
-                    className="px-4 py-2 rounded-lg border border-neutral-700 bg-neutral-950 text-white"
+                    className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                   />
-                  <button onClick={handleAddMilestone} className="px-4 py-2 rounded-lg bg-amber-500 text-neutral-900 font-semibold hover:bg-amber-400 transition">
+                  <button onClick={handleAddMilestone} className="px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600">
                     <Check className="w-5 h-5" />
                   </button>
-                  <button onClick={() => setShowMilestoneForm(false)} className="px-4 py-2 rounded-lg bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition">
+                  <button onClick={() => setShowMilestoneForm(false)} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -463,13 +649,13 @@ export function HomePage() {
 
             {milestones.length === 0 ? (
               <div className="text-center py-12">
-                <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-12 max-w-md mx-auto">
-                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
-                    <Flag className="w-8 h-8 text-amber-500" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 max-w-md mx-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+                    <Flag className="w-8 h-8 text-amber-500 dark:text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">No milestones yet</h3>
-                  <p className="text-neutral-400 mb-6">Track important dates and countdowns</p>
-                  <button onClick={() => setShowMilestoneForm(true)} className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-900 font-semibold transition">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">No milestones yet</h3>
+                  <p className="text-slate-500 dark:text-slate-400 mb-6">Track important dates and countdowns</p>
+                  <button onClick={() => setShowMilestoneForm(true)} className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition">
                     <Plus className="w-5 h-5" />
                     Add Milestone
                   </button>
@@ -478,47 +664,47 @@ export function HomePage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {milestones.map((milestone) => {
-                  const daysLeft = differenceInCalendarDays(parseISO(milestone.target_date), new Date());
+                  const daysLeft = differenceInDays(parseISO(milestone.target_date), new Date());
                   const isPast = daysLeft < 0;
                   const isToday = daysLeft === 0;
                   const isSoon = !isPast && daysLeft <= 7;
                   return (
                     <div
                       key={milestone.id}
-                      className={`bg-neutral-900 rounded-xl border p-5 group transition ${
-                        isToday ? 'border-amber-500/50 shadow-md shadow-amber-900/20'
-                        : isSoon ? 'border-orange-800'
-                        : isPast ? 'border-neutral-800 opacity-60'
-                        : 'border-neutral-800'
+                      className={`bg-white dark:bg-slate-800 rounded-xl border p-5 group transition ${
+                        isToday ? 'border-amber-400 dark:border-amber-600 shadow-md shadow-amber-100 dark:shadow-amber-900/20'
+                        : isSoon ? 'border-orange-300 dark:border-orange-700'
+                        : isPast ? 'border-slate-200 dark:border-slate-700 opacity-60'
+                        : 'border-slate-200 dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <h3 className="font-semibold text-white line-clamp-1">{milestone.title}</h3>
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-100 line-clamp-1">{milestone.title}</h3>
                         <button
                           onClick={() => handleDeleteMilestone(milestone.id)}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                       <div className="flex items-baseline gap-2">
                         <span className={`text-4xl font-bold tabular-nums ${
-                          isPast ? 'text-neutral-500'
+                          isPast ? 'text-slate-400 dark:text-slate-500'
                           : isToday ? 'text-amber-500'
-                          : isSoon ? 'text-orange-400'
-                          : 'text-blue-400'
+                          : isSoon ? 'text-orange-500 dark:text-orange-400'
+                          : 'text-blue-600 dark:text-blue-400'
                         }`}>
                           {isPast ? Math.abs(daysLeft) : daysLeft}
                         </span>
-                        <span className="text-sm text-neutral-400">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
                           {isPast ? 'days ago' : isToday ? '— Today!' : 'days left'}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-neutral-500">
+                      <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
                         {format(parseISO(milestone.target_date), 'MMMM d, yyyy')}
                       </p>
                       {isSoon && !isPast && !isToday && (
-                        <span className="mt-2 inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-orange-900/30 text-orange-400">
+                        <span className="mt-2 inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
                           Coming soon
                         </span>
                       )}

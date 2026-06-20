@@ -24,19 +24,6 @@ export async function recordStudyActivity(topicsCompleted: number): Promise<void
   );
 }
 
-export async function getTodayTopicsCompleted(): Promise<number> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 0;
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const { data } = await supabase
-    .from('study_streaks')
-    .select('topics_completed')
-    .eq('user_id', user.id)
-    .eq('study_date', today)
-    .maybeSingle();
-  return data?.topics_completed ?? 0;
-}
-
 export async function getStreakData(): Promise<{ streaks: StudyStreak[]; currentStreak: number; longestStreak: number }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { streaks: [], currentStreak: 0, longestStreak: 0 };

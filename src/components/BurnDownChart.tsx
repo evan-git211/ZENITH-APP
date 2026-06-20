@@ -27,13 +27,18 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
 
     if (totalDays <= 0 || totalTopics === 0) return [];
 
+    // Build data points for each day
     const points: { day: number; date: string; ideal: number; actual: number; displayDate: string }[] = [];
+    const today = startOfDay(new Date());
 
+    // Create completion lookup
     const completionMap = new Map<string, number>();
     let cumulativeCompleted = 0;
 
+    // Sort completions by date
     const sortedCompletions = [...completions].sort((a, b) => a.date.localeCompare(b.date));
 
+    // Build running total of completions
     sortedCompletions.forEach((c) => {
       cumulativeCompleted += c.count;
       completionMap.set(c.date, cumulativeCompleted);
@@ -43,7 +48,10 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
       const date = addDays(start, day);
       const dateStr = format(date, 'yyyy-MM-dd');
 
+      // Ideal line: straight from totalTopics to 0
       const ideal = Math.max(0, totalTopics * (1 - day / totalDays));
+
+      // Actual remaining = total - cumulative completed up to this date
       const completedToDate = completionMap.get(dateStr) ?? cumulativeCompleted;
       const actual = Math.max(0, totalTopics - completedToDate);
 
@@ -69,7 +77,7 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
 
   if (data.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center text-neutral-500">
+      <div className="h-64 flex items-center justify-center text-slate-400 dark:text-slate-500">
         Not enough data to display chart
       </div>
     );
@@ -81,21 +89,21 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
         <LineChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
           <defs>
             <linearGradient id="idealGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
             </linearGradient>
           </defs>
 
           <CartesianGrid
             strokeDasharray="3 3"
-            className="stroke-neutral-800"
+            className="stroke-slate-200 dark:stroke-slate-700"
           />
 
           <XAxis
             dataKey="displayDate"
             tick={{ fontSize: 12 }}
-            tickLine={{ stroke: '#525252' }}
-            className="fill-neutral-500"
+            tickLine={{ stroke: '#64748b' }}
+            className="fill-slate-500 dark:fill-slate-400"
             interval="preserveStartEnd"
           />
 
@@ -104,18 +112,18 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
               value: 'Topics Left',
               angle: -90,
               position: 'insideLeft',
-              style: { fontSize: 12, fill: '#737373' },
+              style: { fontSize: 12, fill: '#64748b' },
             }}
             tick={{ fontSize: 12 }}
             domain={[0, totalTopics]}
-            tickLine={{ stroke: '#525252' }}
-            className="fill-neutral-500"
+            tickLine={{ stroke: '#64748b' }}
+            className="fill-slate-500 dark:fill-slate-400"
           />
 
           <Tooltip
             contentStyle={{
-              backgroundColor: '#171717',
-              border: '1px solid #262626',
+              backgroundColor: 'rgb(30 41 59)',
+              border: 'none',
               borderRadius: '8px',
               color: 'white',
             }}
@@ -127,6 +135,7 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
             labelFormatter={(label) => `Date: ${label}`}
           />
 
+          {/* Reference line for today */}
           {todayIndex >= 0 && todayIndex < data.length && (
             <ReferenceLine
               x={data[todayIndex]?.displayDate}
@@ -141,42 +150,43 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
             />
           )}
 
-          {/* Target line — gold */}
+          {/* Ideal line */}
           <Area
             type="linear"
             dataKey="ideal"
-            stroke="#D4AF37"
+            stroke="#10b981"
             strokeWidth={2}
             fill="url(#idealGradient)"
             name="ideal"
             dot={false}
           />
 
-          {/* Actual progress line — blue */}
+          {/* Actual line */}
           <Line
             type="stepAfter"
             dataKey="actual"
-            stroke="#3b82f6"
+            stroke="#f59e0b"
             strokeWidth={3}
-            dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
-            activeDot={{ r: 6, fill: '#3b82f6' }}
+            dot={{ fill: '#f59e0b', strokeWidth: 0, r: 4 }}
+            activeDot={{ r: 6, fill: '#f59e0b' }}
             name="actual"
           />
         </LineChart>
       </ResponsiveContainer>
 
+      {/* Legend */}
       <div className="flex items-center justify-center gap-6 mt-4 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
-          <span className="text-neutral-400">Target</span>
+          <div className="w-3 h-3 rounded-full bg-emerald-500" />
+          <span className="text-slate-600 dark:text-slate-400">Target</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
-          <span className="text-neutral-400">Your Progress</span>
+          <div className="w-3 h-3 rounded-full bg-amber-500" />
+          <span className="text-slate-600 dark:text-slate-400">Your Progress</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-px border-t-2 border-dashed border-blue-500" />
-          <span className="text-neutral-400">Today</span>
+          <span className="text-slate-600 dark:text-slate-400">Today</span>
         </div>
       </div>
     </div>

@@ -54,11 +54,10 @@ function buildDaySlots(
   return slots;
 }
 
-// Distribute topics across learning slots proportional to day weight.
-// Each slot receives a target topic count of (weight / totalWeight) * topicCount.
-// Topics are assigned greedily — heaviest first — to the slot most below its quota.
-// This prevents piling and naturally routes high-effort topics to high-capacity days
-// without letting any single day become overwhelmed.
+// Distribute topics across learning slots:
+// - Sort topics by effort DESC (heaviest first)
+// - Sort slots by weight DESC (highest-capacity days first)
+// - Match heaviest topics to highest-weight days
 function distributeByWeight(
   topics: TopicInput[],
   slots: DaySlot[],
@@ -66,28 +65,26 @@ function distributeByWeight(
 ): AssignmentOutput[] {
   if (slots.length === 0 || topics.length === 0) return [];
 
-  const totalWeight = slots.reduce((s, d) => s + d.weight, 0);
+  const totalCapacity = slots.reduce((s, d) => s + d.weight, 0);
+  const totalEffort = topics.reduce((s, t) => s + t.estimatedEffort, 0);
+  const capacityPerEffortUnit = totalCapacity / totalEffort;
+
+  // Work on a fresh copy of slots sorted by weight DESC
+  const sortedSlots: DaySlot[] = [...slots]
+    .sort((a, b) => b.weight - a.weight)
+    .map((s) => ({ ...s })); // deep copy so we don't mutate originals
+
   const sortedTopics = [...topics].sort((a, b) => b.estimatedEffort - a.estimatedEffort);
-
-  const slotData = slots.map((s) => ({
-    dateStr: s.dateStr,
-    weight: s.weight,
-    targetCount: (s.weight / totalWeight) * topics.length,
-    assignedCount: 0,
-  }));
-
   const assignments: AssignmentOutput[] = [];
 
   for (const topic of sortedTopics) {
-    // Pick the slot with the largest remaining deficit (targetCount - assignedCount).
-    // Ties broken by higher weight so heavy topics land on high-capacity days.
-    const chosen = slotData.reduce((best, s) => {
-      const deficit = s.targetCount - s.assignedCount;
-      const bestDeficit = best.targetCount - best.assignedCount;
-      if (deficit > bestDeficit + 1e-9) return s;
-      if (Math.abs(deficit - bestDeficit) < 1e-9 && s.weight > best.weight) return s;
-      return best;
-    });
+    const required = topic.estimatedEffort * capacityPerEffortUnit;
+    // Prefer the highest-weight slot that still has enough room
+    let chosen = sortedSlots.find((s) => s.remaining >= required * 0.5);
+    if (!chosen) {
+      // Fallback: the slot with the most remaining capacity
+      chosen = sortedSlots.reduce((a, b) => (a.remaining >= b.remaining ? a : b));
+    }
     assignments.push({
       topicId: topic.id,
       assignedDate: chosen.dateStr,
@@ -95,7 +92,7 @@ function distributeByWeight(
       phase,
       orderInDay: 0,
     });
-    chosen.assignedCount++;
+    chosen.remaining -= required;
   }
 
   return assignments;
@@ -144,7 +141,7 @@ export function scheduleTopicsBackward(input: SchedulingInput): AssignmentOutput
 
   const weightMap = new Map<number, number>();
   input.dayWeights.forEach((w) => weightMap.set(w.dayOfWeek, w.weight));
-  const getDayWeight = (d: Date): number => weightMap.get(getDay(d)) ?? 0;
+  const getDayWeight = (d: Date): number => weightMap.get(getDay(d)) ?? 1;
 
   // Learning phase: today → (examDate - revisionDays - 1)
   const learningPhaseEnd = addDays(examDate, -(input.revisionDays + 1));
