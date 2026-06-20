@@ -18,7 +18,6 @@ async function getCroppedBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> 
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  // Draw only the cropped region
   ctx.drawImage(
     image,
     pixelCrop.x,
