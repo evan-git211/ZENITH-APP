@@ -1,15 +1,23 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PreferencesProvider } from './contexts/PreferencesContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { AuthForm } from './components/Auth';
-import { HomePage } from './pages/HomePage';
-import { ExamSetupWizard } from './components/ExamSetupWizard';
-import { ExamSchedulePage } from './pages/ExamSchedulePage';
-import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+const AuthForm = lazy(() => import('./components/Auth').then(m => ({ default: m.AuthForm })));
+const HomePage = lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const ExamSetupWizard = lazy(() => import('./components/ExamSetupWizard').then(m => ({ default: m.ExamSetupWizard })));
+const ExamSchedulePage = lazy(() => import('./pages/ExamSchedulePage').then(m => ({ default: m.ExamSchedulePage })));
+const KeyboardShortcutsProvider = lazy(() => import('./components/KeyboardShortcuts').then(m => ({ default: m.KeyboardShortcutsProvider })));
+
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center" style={{ background: '#0f172a' }}>
+    <div className="w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 function App() {
   return (
@@ -18,6 +26,7 @@ function App() {
         <PreferencesProvider>
           <AuthProvider>
             <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
               <KeyboardShortcutsProvider>
                 <Toaster
                   position="top-right"
@@ -68,6 +77,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </KeyboardShortcutsProvider>
+              </Suspense>
             </BrowserRouter>
           </AuthProvider>
         </PreferencesProvider>
