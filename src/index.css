@@ -4,14 +4,264 @@
 
 @layer base {
   html {
-    color-scheme: light;
-  }
-
-  html.dark {
     color-scheme: dark;
   }
 
-  body {
-    @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200;
+  html.light {
+    color-scheme: light;
   }
+
+  body {
+    background: linear-gradient(160deg, #0c1628 0%, #111827 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    @apply text-neutral-100 transition-colors duration-200;
+  }
+}
+
+/* ── Light mode overrides ──────────────────────────────────────────────────
+   Covers every dark surface class used across all components.             */
+
+/* Body */
+html.light body { background: linear-gradient(160deg, #f0f4f8 0%, #e8edf5 100%) !important; color: #0f172a !important; }
+
+/* Page / wrapper backgrounds — body handles the base, these cover any remaining wrappers */
+
+/* Slate surfaces (cards, sections, modals) */
+html.light .bg-slate-800          { background-color: #ffffff !important; }
+html.light .bg-slate-700          { background-color: #f1f5f9 !important; }
+html.light .bg-slate-800\/50      { background-color: rgba(255,255,255,0.5) !important; }
+html.light .bg-slate-800\/40      { background-color: rgba(255,255,255,0.4) !important; }
+html.light .bg-slate-800\/60      { background-color: rgba(255,255,255,0.6) !important; }
+
+/* Neutral surfaces */
+html.light .bg-neutral-950        { background-color: #f8fafc !important; }
+html.light .bg-neutral-900        { background-color: #f1f5f9 !important; }
+html.light .bg-neutral-800        { background-color: #e2e8f0 !important; }
+html.light .bg-neutral-700        { background-color: #cbd5e1 !important; }
+html.light .bg-neutral-800\/50    { background-color: rgba(226,232,240,0.5) !important; }
+html.light .bg-neutral-800\/40    { background-color: rgba(226,232,240,0.4) !important; }
+html.light .bg-neutral-800\/60    { background-color: rgba(226,232,240,0.6) !important; }
+html.light .bg-neutral-950\/80    { background-color: rgba(248,250,252,0.9) !important; }
+
+/* Borders */
+html.light .border-slate-700      { border-color: #cbd5e1 !important; }
+html.light .border-slate-800      { border-color: #e2e8f0 !important; }
+html.light .border-neutral-800    { border-color: #e2e8f0 !important; }
+html.light .border-neutral-700    { border-color: #cbd5e1 !important; }
+html.light .border-neutral-800\/50 { border-color: rgba(226,232,240,0.6) !important; }
+
+/* Text — neutral scale */
+html.light .text-neutral-100 { color: #0f172a !important; }
+html.light .text-neutral-200 { color: #1e293b !important; }
+html.light .text-neutral-300 { color: #334155 !important; }
+html.light .text-neutral-400 { color: #475569 !important; }
+html.light .text-neutral-500 { color: #64748b !important; }
+html.light .text-neutral-600 { color: #94a3b8 !important; }
+
+/* Text — slate scale (ExamSchedulePage, ExamSetupWizard, etc.) */
+html.light .text-slate-100 { color: #0f172a !important; }
+html.light .text-slate-200 { color: #1e293b !important; }
+html.light .text-slate-300 { color: #334155 !important; }
+html.light .text-slate-400 { color: #475569 !important; }
+html.light .text-slate-500 { color: #64748b !important; }
+html.light .text-slate-600 { color: #94a3b8 !important; }
+
+/* Alpha-based backgrounds (white-on-white = invisible in light mode) */
+html.light .bg-white\/\[0\.03\] { background-color: rgba(0,0,0,0.02) !important; }
+html.light .bg-white\/\[0\.04\] { background-color: rgba(0,0,0,0.03) !important; }
+html.light .bg-white\/\[0\.05\] { background-color: rgba(0,0,0,0.04) !important; }
+html.light .bg-white\/\[0\.07\] { background-color: rgba(0,0,0,0.05) !important; }
+html.light .bg-white\/\[0\.08\] { background-color: rgba(0,0,0,0.08) !important; }
+html.light .bg-white\/\[0\.10\] { background-color: rgba(0,0,0,0.07) !important; }
+html.light .bg-white\/\[0\.12\] { background-color: rgba(0,0,0,0.08) !important; }
+html.light .bg-white\/\[0\.15\] { background-color: rgba(0,0,0,0.1)  !important; }
+
+/* Alpha-based borders */
+html.light .border-white\/\[0\.07\] { border-color: rgba(0,0,0,0.08) !important; }
+html.light .border-white\/\[0\.08\] { border-color: rgba(0,0,0,0.1)  !important; }
+html.light .border-white\/\[0\.09\] { border-color: rgba(0,0,0,0.1)  !important; }
+
+/* Hover states for alpha backgrounds */
+html.light .hover\:bg-white\/\[0\.05\]:hover { background-color: rgba(0,0,0,0.05) !important; }
+html.light .hover\:bg-white\/\[0\.08\]:hover { background-color: rgba(0,0,0,0.08) !important; }
+html.light .hover\:bg-white\/\[0\.15\]:hover { background-color: rgba(0,0,0,0.1)  !important; }
+
+/* SVG stroke for timer ring track */
+html.light .stroke-timer-track { stroke: #cbd5e1 !important; }
+
+/* Hover states */
+html.light .hover\:bg-slate-800:hover   { background-color: #f1f5f9 !important; }
+html.light .hover\:bg-slate-700:hover   { background-color: #e2e8f0 !important; }
+html.light .hover\:bg-neutral-800:hover { background-color: #e2e8f0 !important; }
+html.light .hover\:bg-neutral-700:hover { background-color: #cbd5e1 !important; }
+html.light .hover\:text-slate-200:hover    { color: #0f172a !important; }
+html.light .hover\:text-slate-300:hover    { color: #1e293b !important; }
+html.light .hover\:border-neutral-700:hover  { border-color: #94a3b8 !important; }
+html.light .hover\:border-slate-700:hover    { border-color: #94a3b8 !important; }
+html.light .hover\:text-neutral-200:hover    { color: #0f172a !important; }
+html.light .hover\:text-neutral-300:hover    { color: #1e293b !important; }
+
+/* Ring / focus */
+html.light .ring-neutral-700    { --tw-ring-color: #cbd5e1 !important; }
+html.light .border-neutral-600  { border-color: #94a3b8 !important; }
+
+
+/* ── Accent color overrides ────────────────────────────────────────────────
+   When html has accent-{color} class, map amber utilities to that hue.    */
+
+/* Blue */
+html.accent-blue .bg-amber-500         { background-color: #3b82f6 !important; }
+html.accent-blue .bg-amber-400         { background-color: #60a5fa !important; }
+html.accent-blue .bg-amber-500\/10     { background-color: rgba(59,130,246,0.1) !important; }
+html.accent-blue .bg-amber-500\/20     { background-color: rgba(59,130,246,0.2) !important; }
+html.accent-blue .border-amber-500     { border-color: #3b82f6 !important; }
+html.accent-blue .border-amber-500\/20 { border-color: rgba(59,130,246,0.2) !important; }
+html.accent-blue .border-amber-500\/30 { border-color: rgba(59,130,246,0.3) !important; }
+html.accent-blue .text-amber-400       { color: #60a5fa !important; }
+html.accent-blue .text-amber-300       { color: #93c5fd !important; }
+html.accent-blue .text-amber-500       { color: #3b82f6 !important; }
+html.accent-blue .from-amber-400       { --tw-gradient-from: #60a5fa !important; }
+html.accent-blue .to-amber-200         { --tw-gradient-to: #bfdbfe !important; }
+html.accent-blue .hover\:bg-amber-400:hover { background-color: #60a5fa !important; }
+html.accent-blue .ring-amber-500       { --tw-ring-color: #3b82f6 !important; }
+html.accent-blue .focus\:ring-amber-500:focus { --tw-ring-color: #3b82f6 !important; }
+html.accent-blue .accent-amber-500     { accent-color: #3b82f6 !important; }
+html.accent-blue .shadow-amber-500\/10 { --tw-shadow-color: rgba(59,130,246,0.1) !important; }
+
+/* Violet */
+html.accent-violet .bg-amber-500         { background-color: #8b5cf6 !important; }
+html.accent-violet .bg-amber-400         { background-color: #a78bfa !important; }
+html.accent-violet .bg-amber-500\/10     { background-color: rgba(139,92,246,0.1) !important; }
+html.accent-violet .bg-amber-500\/20     { background-color: rgba(139,92,246,0.2) !important; }
+html.accent-violet .border-amber-500     { border-color: #8b5cf6 !important; }
+html.accent-violet .border-amber-500\/20 { border-color: rgba(139,92,246,0.2) !important; }
+html.accent-violet .border-amber-500\/30 { border-color: rgba(139,92,246,0.3) !important; }
+html.accent-violet .text-amber-400       { color: #a78bfa !important; }
+html.accent-violet .text-amber-300       { color: #c4b5fd !important; }
+html.accent-violet .text-amber-500       { color: #8b5cf6 !important; }
+html.accent-violet .from-amber-400       { --tw-gradient-from: #a78bfa !important; }
+html.accent-violet .to-amber-200         { --tw-gradient-to: #ede9fe !important; }
+html.accent-violet .hover\:bg-amber-400:hover { background-color: #a78bfa !important; }
+html.accent-violet .ring-amber-500       { --tw-ring-color: #8b5cf6 !important; }
+html.accent-violet .focus\:ring-amber-500:focus { --tw-ring-color: #8b5cf6 !important; }
+html.accent-violet .accent-amber-500     { accent-color: #8b5cf6 !important; }
+html.accent-violet .shadow-amber-500\/10 { --tw-shadow-color: rgba(139,92,246,0.1) !important; }
+
+/* Emerald */
+html.accent-emerald .bg-amber-500         { background-color: #10b981 !important; }
+html.accent-emerald .bg-amber-400         { background-color: #34d399 !important; }
+html.accent-emerald .bg-amber-500\/10     { background-color: rgba(16,185,129,0.1) !important; }
+html.accent-emerald .bg-amber-500\/20     { background-color: rgba(16,185,129,0.2) !important; }
+html.accent-emerald .border-amber-500     { border-color: #10b981 !important; }
+html.accent-emerald .border-amber-500\/20 { border-color: rgba(16,185,129,0.2) !important; }
+html.accent-emerald .border-amber-500\/30 { border-color: rgba(16,185,129,0.3) !important; }
+html.accent-emerald .text-amber-400       { color: #34d399 !important; }
+html.accent-emerald .text-amber-300       { color: #6ee7b7 !important; }
+html.accent-emerald .text-amber-500       { color: #10b981 !important; }
+html.accent-emerald .from-amber-400       { --tw-gradient-from: #34d399 !important; }
+html.accent-emerald .to-amber-200         { --tw-gradient-to: #d1fae5 !important; }
+html.accent-emerald .hover\:bg-amber-400:hover { background-color: #34d399 !important; }
+html.accent-emerald .ring-amber-500       { --tw-ring-color: #10b981 !important; }
+html.accent-emerald .focus\:ring-amber-500:focus { --tw-ring-color: #10b981 !important; }
+html.accent-emerald .accent-amber-500     { accent-color: #10b981 !important; }
+html.accent-emerald .shadow-amber-500\/10 { --tw-shadow-color: rgba(16,185,129,0.1) !important; }
+
+/* Rose */
+html.accent-rose .bg-amber-500         { background-color: #f43f5e !important; }
+html.accent-rose .bg-amber-400         { background-color: #fb7185 !important; }
+html.accent-rose .bg-amber-500\/10     { background-color: rgba(244,63,94,0.1) !important; }
+html.accent-rose .bg-amber-500\/20     { background-color: rgba(244,63,94,0.2) !important; }
+html.accent-rose .border-amber-500     { border-color: #f43f5e !important; }
+html.accent-rose .border-amber-500\/20 { border-color: rgba(244,63,94,0.2) !important; }
+html.accent-rose .border-amber-500\/30 { border-color: rgba(244,63,94,0.3) !important; }
+html.accent-rose .text-amber-400       { color: #fb7185 !important; }
+html.accent-rose .text-amber-300       { color: #fda4af !important; }
+html.accent-rose .text-amber-500       { color: #f43f5e !important; }
+html.accent-rose .from-amber-400       { --tw-gradient-from: #fb7185 !important; }
+html.accent-rose .to-amber-200         { --tw-gradient-to: #ffe4e6 !important; }
+html.accent-rose .hover\:bg-amber-400:hover { background-color: #fb7185 !important; }
+html.accent-rose .ring-amber-500       { --tw-ring-color: #f43f5e !important; }
+html.accent-rose .focus\:ring-amber-500:focus { --tw-ring-color: #f43f5e !important; }
+html.accent-rose .accent-amber-500     { accent-color: #f43f5e !important; }
+html.accent-rose .shadow-amber-500\/10 { --tw-shadow-color: rgba(244,63,94,0.1) !important; }
+
+
+/* ── Compact mode ──────────────────────────────────────────────────────────
+   html.compact reduces padding on cards/containers and tightens spacing.  */
+html.compact .p-5   { padding: 0.75rem !important; }
+html.compact .p-6   { padding: 1rem !important; }
+html.compact .p-8   { padding: 1.25rem !important; }
+html.compact .py-8  { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+html.compact .py-5  { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+html.compact .mb-6  { margin-bottom: 0.75rem !important; }
+html.compact .gap-4 { gap: 0.5rem !important; }
+html.compact .space-y-2 > * + * { margin-top: 0.25rem !important; }
+html.compact .h-16  { height: 3.25rem !important; }
+html.compact .py-3  { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
+
+/* ── Named utility classes ─────────────────────────────────────────────────*/
+.zenith-header { background-color: rgba(12,22,40,0.85); }
+html.light .zenith-header { background-color: rgba(240,244,248,0.9) !important; }
+
+/* ── Glass surfaces ─────────────────────────────────────────────────────── */
+.glass-surface {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.glass-surface:hover {
+  border-color: rgba(255,255,255,0.16);
+}
+.glass-banner {
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html.light .glass-surface {
+  background: rgba(255,255,255,0.88) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(0,0,0,0.06);
+}
+html.light .glass-surface:hover {
+  border-color: rgba(0,0,0,0.18) !important;
+}
+html.light .glass-banner {
+  background: rgba(255,255,255,0.88) !important;
+  border-bottom-color: rgba(0,0,0,0.1) !important;
+}
+
+/* ── Page transitions ───────────────────────────────────────────────────── */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: page-fade-in 0.2s ease-out forwards;
+}
+
+/* ── Skeleton shimmer ───────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.animate-pulse {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+html.light .animate-pulse {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%) !important;
+  background-size: 200% 100% !important;
+}
+
+/* ── Mobile responsive utilities ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .mobile-stack { flex-direction: column !important; }
+  .mobile-full  { width: 100% !important; }
+  .mobile-hide  { display: none !important; }
 }

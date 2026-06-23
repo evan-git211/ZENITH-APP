@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfDay } from 'date-fns';
 import type { StudyStreak } from '../types/database';
 
 export async function recordStudyActivity(topicsCompleted: number): Promise<void> {
@@ -77,4 +77,44 @@ export async function getStreakData(): Promise<{ streaks: StudyStreak[]; current
   }
 
   return { streaks: data, currentStreak, longestStreak };
+}
+
+export async function getStudyTimeSessions(days = 14): Promise<{ date: string; minutes: number }[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const since = format(subDays(startOfDay(new Date()), days - 1), 'yyyy-MM-dd');
+
+  const { data, error } = await supabase
+    .from('todos')
+    .select('timer_minutes, completed_at')
+    .eq('user_id', user.id)
+    .eq('is_completed', true)
+    .not('timer_minutes', 'is', null)
+    .gte('completed_at', since)
+    .order('completed_at', { ascending: true });
+
+  if (error || !data) return [];
+
+  const byDate = new Map<string, number>();
+  data.forEach((row) => {
+    if (!row.completed_at || !row.timer_minutes) return;
+    const date = format(new Date(row.completed_at), 'yyyy-MM-dd');
+    byDate.set(date, (byDate.get(date) ?? 0) + (row.timer_minutes as number));
+  });
+
+  return Array.from(byDate.entries()).map(([date, minutes]) => ({ date, minutes }));
+}
+
+export async function getTodayTopicsCompleted(): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const { data } = await supabase
+    .from('study_streaks')
+    .select('topics_completed')
+    .eq('user_id', user.id)
+    .eq('study_date', today)
+    .maybeSingle();
+  return data?.topics_completed ?? 0;
 }

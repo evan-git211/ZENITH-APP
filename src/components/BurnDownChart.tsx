@@ -8,9 +8,17 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  Area,
 } from 'recharts';
 import { format, addDays, differenceInDays, startOfDay } from 'date-fns';
+import { usePreferences, type AccentColor } from '../contexts/PreferencesContext';
+
+const ACCENT_HEX: Record<AccentColor, string> = {
+  amber:   '#f59e0b',
+  blue:    '#3b82f6',
+  violet:  '#8b5cf6',
+  emerald: '#10b981',
+  rose:    '#f43f5e',
+};
 
 interface BurnDownChartProps {
   examDate: string;
@@ -20,6 +28,9 @@ interface BurnDownChartProps {
 }
 
 export function BurnDownChart({ examDate, createdAt, totalTopics, completions }: BurnDownChartProps) {
+  const { accentColor } = usePreferences();
+  const lineColor = ACCENT_HEX[accentColor];
+
   const data = useMemo(() => {
     const start = startOfDay(new Date(createdAt));
     const end = startOfDay(new Date(examDate));
@@ -27,40 +38,30 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
 
     if (totalDays <= 0 || totalTopics === 0) return [];
 
-    // Build data points for each day
-    const points: { day: number; date: string; ideal: number; actual: number; displayDate: string }[] = [];
-    const today = startOfDay(new Date());
-
-    // Create completion lookup
+    // Build cumulative completion map
     const completionMap = new Map<string, number>();
-    let cumulativeCompleted = 0;
+    let cumulative = 0;
+    [...completions]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach((c) => {
+        cumulative += c.count;
+        completionMap.set(c.date, cumulative);
+      });
 
-    // Sort completions by date
-    const sortedCompletions = [...completions].sort((a, b) => a.date.localeCompare(b.date));
-
-    // Build running total of completions
-    sortedCompletions.forEach((c) => {
-      cumulativeCompleted += c.count;
-      completionMap.set(c.date, cumulativeCompleted);
-    });
+    const today = startOfDay(new Date());
+    const points: { day: number; displayDate: string; completed: number | null }[] = [];
 
     for (let day = 0; day <= totalDays; day++) {
       const date = addDays(start, day);
       const dateStr = format(date, 'yyyy-MM-dd');
+      const isPast = date <= today;
 
-      // Ideal line: straight from totalTopics to 0
-      const ideal = Math.max(0, totalTopics * (1 - day / totalDays));
-
-      // Actual remaining = total - cumulative completed up to this date
-      const completedToDate = completionMap.get(dateStr) ?? cumulativeCompleted;
-      const actual = Math.max(0, totalTopics - completedToDate);
-
+      // Only plot actual data up to today — future stays null (no line drawn)
+      const completedToDate = completionMap.get(dateStr) ?? cumulative;
       points.push({
         day,
-        date: dateStr,
-        ideal: Math.round(ideal * 10) / 10,
-        actual: Math.round(actual * 10) / 10,
         displayDate: format(date, 'MMM d'),
+        completed: isPast ? completedToDate : null,
       });
     }
 
@@ -69,126 +70,77 @@ export function BurnDownChart({ examDate, createdAt, totalTopics, completions }:
 
   const todayIndex = useMemo(() => {
     const start = startOfDay(new Date(createdAt));
-    const today = startOfDay(new Date());
-    return differenceInDays(today, start);
+    return differenceInDays(startOfDay(new Date()), start);
   }, [createdAt]);
-
-  const totalDays = differenceInDays(new Date(examDate), new Date(createdAt));
 
   if (data.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center text-slate-400 dark:text-slate-500">
+      <div className="h-64 flex items-center justify-center text-slate-400">
         Not enough data to display chart
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-          <defs>
-            <linearGradient id="idealGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-            </linearGradient>
-          </defs>
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
 
-          <CartesianGrid
-            strokeDasharray="3 3"
-            className="stroke-slate-200 dark:stroke-slate-700"
+        <XAxis
+          dataKey="displayDate"
+          tick={{ fontSize: 11, fill: '#64748b' }}
+          tickLine={false}
+          axisLine={false}
+          interval="preserveStartEnd"
+        />
+
+        <YAxis
+          tick={{ fontSize: 11, fill: '#64748b' }}
+          tickLine={false}
+          axisLine={false}
+          domain={[0, totalTopics]}
+          label={{
+            value: 'Topics Done',
+            angle: -90,
+            position: 'insideLeft',
+            style: { fontSize: 11, fill: '#64748b' },
+          }}
+        />
+
+        <Tooltip
+          contentStyle={{
+            backgroundColor: 'rgba(15,23,42,0.95)',
+            border: `1px solid ${lineColor}33`,
+            borderRadius: '8px',
+            color: '#f1f5f9',
+            fontSize: 13,
+          }}
+          itemStyle={{ color: lineColor }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter={(value: any) => [value != null ? value : '—', 'Topics completed']}
+          labelFormatter={(label) => `${label}`}
+        />
+
+        {/* Today marker */}
+        {todayIndex >= 0 && todayIndex < data.length && (
+          <ReferenceLine
+            x={data[todayIndex]?.displayDate}
+            stroke="rgba(255,255,255,0.2)"
+            strokeDasharray="4 4"
+            label={{ value: 'Today', fill: '#64748b', fontSize: 11, position: 'top' }}
           />
+        )}
 
-          <XAxis
-            dataKey="displayDate"
-            tick={{ fontSize: 12 }}
-            tickLine={{ stroke: '#64748b' }}
-            className="fill-slate-500 dark:fill-slate-400"
-            interval="preserveStartEnd"
-          />
-
-          <YAxis
-            label={{
-              value: 'Topics Left',
-              angle: -90,
-              position: 'insideLeft',
-              style: { fontSize: 12, fill: '#64748b' },
-            }}
-            tick={{ fontSize: 12 }}
-            domain={[0, totalTopics]}
-            tickLine={{ stroke: '#64748b' }}
-            className="fill-slate-500 dark:fill-slate-400"
-          />
-
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'rgb(30 41 59)',
-              border: 'none',
-              borderRadius: '8px',
-              color: 'white',
-            }}
-            itemStyle={{ color: 'white' }}
-            formatter={(value: number, name: string) => [
-              value.toFixed(1),
-              name === 'actual' ? 'Your Progress' : 'Target',
-            ]}
-            labelFormatter={(label) => `Date: ${label}`}
-          />
-
-          {/* Reference line for today */}
-          {todayIndex >= 0 && todayIndex < data.length && (
-            <ReferenceLine
-              x={data[todayIndex]?.displayDate}
-              stroke="#3b82f6"
-              strokeDasharray="5 5"
-              label={{
-                value: 'Today',
-                fill: '#3b82f6',
-                fontSize: 12,
-                position: 'top',
-              }}
-            />
-          )}
-
-          {/* Ideal line */}
-          <Area
-            type="linear"
-            dataKey="ideal"
-            stroke="#10b981"
-            strokeWidth={2}
-            fill="url(#idealGradient)"
-            name="ideal"
-            dot={false}
-          />
-
-          {/* Actual line */}
-          <Line
-            type="stepAfter"
-            dataKey="actual"
-            stroke="#f59e0b"
-            strokeWidth={3}
-            dot={{ fill: '#f59e0b', strokeWidth: 0, r: 4 }}
-            activeDot={{ r: 6, fill: '#f59e0b' }}
-            name="actual"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="text-slate-600 dark:text-slate-400">Target</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
-          <span className="text-slate-600 dark:text-slate-400">Your Progress</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-px border-t-2 border-dashed border-blue-500" />
-          <span className="text-slate-600 dark:text-slate-400">Today</span>
-        </div>
-      </div>
-    </div>
+        <Line
+          type="monotone"
+          dataKey="completed"
+          stroke={lineColor}
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5, fill: lineColor, strokeWidth: 0 }}
+          connectNulls={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }

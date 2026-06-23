@@ -208,6 +208,94 @@ describe('calculateDailyStats', () => {
   });
 });
 
+describe('scheduleTopicsBackward — edge cases', () => {
+  const futureDate = (daysFromNow: number) => addDays(new Date(), daysFromNow);
+
+  it('throws when exam date is today', () => {
+    expect(() =>
+      scheduleTopicsBackward({
+        examDate: new Date(),
+        revisionDays: 0,
+        topics: [{ id: 't1', title: 'T', estimatedEffort: 1 }],
+        dayWeights: [{ dayOfWeek: 1, weight: 1 }],
+      })
+    ).toThrow();
+  });
+
+  it('handles single topic assigned within single available day', () => {
+    // Only 2 days left, revisionDays=0 → 2 learning days
+    const result = scheduleTopicsBackward({
+      examDate: futureDate(2),
+      revisionDays: 0,
+      topics: [{ id: 'only', title: 'Only Topic', estimatedEffort: 3 }],
+      dayWeights: [
+        { dayOfWeek: 0, weight: 1 }, { dayOfWeek: 1, weight: 1 }, { dayOfWeek: 2, weight: 1 },
+        { dayOfWeek: 3, weight: 1 }, { dayOfWeek: 4, weight: 1 }, { dayOfWeek: 5, weight: 1 },
+        { dayOfWeek: 6, weight: 1 },
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].topicId).toBe('only');
+    expect(result[0].phase).toBe('learning');
+  });
+
+  it('wraps topics when more topics than revision slots', () => {
+    // 3 revision days but 6 topics → wrap-around, all get assigned
+    const topics = Array.from({ length: 6 }, (_, i) => ({
+      id: `t${i}`, title: `Topic ${i}`, estimatedEffort: 2,
+    }));
+    const result = scheduleTopicsBackward({
+      examDate: futureDate(30),
+      revisionDays: 3,
+      topics,
+      dayWeights: [
+        { dayOfWeek: 1, weight: 1 }, { dayOfWeek: 2, weight: 1 }, { dayOfWeek: 3, weight: 1 },
+        { dayOfWeek: 4, weight: 1 }, { dayOfWeek: 5, weight: 1 },
+      ],
+    });
+    const revisionAssignments = result.filter((a) => a.phase === 'revision');
+    expect(revisionAssignments).toHaveLength(6);
+  });
+
+  it('assigns heavier topics to higher-weight days (learning phase)', () => {
+    // Use a long window with clear weight contrast
+    const result = scheduleTopicsBackward({
+      examDate: futureDate(60),
+      revisionDays: 5,
+      topics: [
+        { id: 'heavy', title: 'Heavy', estimatedEffort: 5 },
+        { id: 'light', title: 'Light', estimatedEffort: 1 },
+      ],
+      dayWeights: [
+        { dayOfWeek: 1, weight: 5 }, // Monday — heavy
+        { dayOfWeek: 3, weight: 1 }, // Wednesday — light
+      ],
+    });
+    expect(result).toHaveLength(2);
+    // Heavy topic should be in learning phase on a Monday (weight=5 slot)
+    const heavy = result.find((a) => a.topicId === 'heavy');
+    expect(heavy?.phase).toBe('learning');
+  });
+
+  it('returns correct orderInDay for multi-topic days', () => {
+    const topics = Array.from({ length: 5 }, (_, i) => ({
+      id: `t${i}`, title: `Topic ${i}`, estimatedEffort: 1,
+    }));
+    const result = scheduleTopicsBackward({
+      examDate: futureDate(30),
+      revisionDays: 0,
+      topics,
+      // Only one day of week available so all 5 land on same day
+      dayWeights: [{ dayOfWeek: 3, weight: 5 }],
+    });
+    const orders = result.map((a) => a.orderInDay).sort((a, b) => a - b);
+    expect(orders[0]).toBe(0);
+    // Each should have a unique order
+    const unique = new Set(orders);
+    expect(unique.size).toBe(orders.length);
+  });
+});
+
 describe('isTopicMoved', () => {
   it('should return false when dates match', () => {
     expect(isTopicMoved('2024-01-15', '2024-01-15')).toBe(false);

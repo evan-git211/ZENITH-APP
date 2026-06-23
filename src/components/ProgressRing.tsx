@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { usePreferences, type AccentColor } from '../contexts/PreferencesContext';
 
 interface ProgressRingProps {
   percentage: number;
@@ -6,30 +7,14 @@ interface ProgressRingProps {
   strokeWidth?: number;
   label?: string;
   showPercentage?: boolean;
-  color?: 'emerald' | 'blue' | 'amber' | 'red';
 }
 
-const COLOR_MAP = {
-  emerald: {
-    stroke: 'stroke-emerald-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  blue: {
-    stroke: 'stroke-blue-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-blue-600 dark:text-blue-400',
-  },
-  amber: {
-    stroke: 'stroke-amber-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-amber-600 dark:text-amber-400',
-  },
-  red: {
-    stroke: 'stroke-red-500',
-    bg: 'stroke-slate-200 dark:stroke-slate-700',
-    text: 'text-red-600 dark:text-red-400',
-  },
+const ACCENT_HEX: Record<AccentColor, string> = {
+  amber:   '#f59e0b',
+  blue:    '#3b82f6',
+  violet:  '#8b5cf6',
+  emerald: '#10b981',
+  rose:    '#f43f5e',
 };
 
 export function ProgressRing({
@@ -38,17 +23,16 @@ export function ProgressRing({
   strokeWidth = 10,
   label,
   showPercentage = true,
-  color = 'emerald',
 }: ProgressRingProps) {
+  const { accentColor } = usePreferences();
+  const hex = ACCENT_HEX[accentColor];
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
-  const colors = COLOR_MAP[color];
 
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (animatedPercentage / 100) * circumference;
 
   useEffect(() => {
-    // Animate from 0 to actual percentage
     const timer = setTimeout(() => {
       setAnimatedPercentage(percentage);
     }, 100);
@@ -60,7 +44,7 @@ export function ProgressRing({
       <svg width={size} height={size} className="transform -rotate-90">
         {/* Background circle */}
         <circle
-          className={colors.bg}
+          stroke="rgba(100,116,139,0.3)"
           fill="transparent"
           r={radius}
           cx={size / 2}
@@ -69,7 +53,6 @@ export function ProgressRing({
         />
         {/* Progress circle */}
         <circle
-          className={`${colors.stroke} transition-all duration-1000 ease-out`}
           fill="transparent"
           r={radius}
           cx={size / 2}
@@ -78,12 +61,13 @@ export function ProgressRing({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
+          style={{ stroke: hex, transition: 'stroke-dashoffset 1s ease-out' }}
         />
       </svg>
       {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {showPercentage && (
-          <span className={`text-2xl font-bold ${colors.text}`}>
+          <span className="text-2xl font-bold" style={{ color: hex }}>
             {Math.round(animatedPercentage)}%
           </span>
         )}

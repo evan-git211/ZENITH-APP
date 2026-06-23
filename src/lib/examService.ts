@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Exam, Topic, DayWeight, ScheduledAssignment } from '../types/database';
+import type { Exam, Topic, ScheduledAssignment } from '../types/database';
 import { scheduleTopicsBackward } from './schedulingAlgorithm';
 
 // Create a new exam with all related data
@@ -83,6 +83,69 @@ export async function createExam(data: {
   if (assignmentsError) throw assignmentsError;
 
   return { exam, topics, assignments };
+}
+
+// ── ExamProgress ──────────────────────────────────────────────────────────
+export interface ExamProgress {
+  exam: Exam;
+  totalAssignments: number;
+  completedAssignments: number;
+  currentPhase: 'learning' | 'revision' | 'complete';
+  progressPercent: number;
+  revisionTotal: number;
+  revisionCompleted: number;
+  revisionPercent: number;
+}
+
+type RawAssignment = { id: string; is_completed: boolean; phase: string; assigned_date: string };
+interface RawExamRow extends Exam { scheduled_assignments: RawAssignment[] }
+
+export async function getExamsWithProgress(): Promise<ExamProgress[]> {
+  const { data, error } = await supabase
+    .from('exams')
+    .select('*, scheduled_assignments(id, is_completed, phase, assigned_date)')
+    .order('exam_date', { ascending: true });
+
+  if (error) throw error;
+  const today = new Date().toISOString().split('T')[0];
+
+  return (data as RawExamRow[]).map((row) => {
+    const assignments: RawAssignment[] = row.scheduled_assignments ?? [];
+
+    const learningAssignments = assignments.filter((a) => a.phase === 'learning');
+    const total = learningAssignments.length;
+    const completed = learningAssignments.filter((a) => a.is_completed).length;
+    const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    const revisionAssignments = assignments.filter((a) => a.phase === 'revision');
+    const revisionTotal = revisionAssignments.length;
+    const revisionCompleted = revisionAssignments.filter((a) => a.is_completed).length;
+    const revisionPercent = revisionTotal > 0 ? Math.round((revisionCompleted / revisionTotal) * 100) : 0;
+
+    const todayAssignments = assignments.filter((a) => a.assigned_date === today);
+    const hasRevisionToday = todayAssignments.some((a) => a.phase === 'revision');
+    const hasLearningToday = todayAssignments.some((a) => a.phase === 'learning');
+
+    let currentPhase: 'learning' | 'revision' | 'complete' = 'learning';
+    if (total > 0 && completed === total) {
+      currentPhase = 'complete';
+    } else if (hasRevisionToday && !hasLearningToday) {
+      currentPhase = 'revision';
+    } else if (!hasRevisionToday && !hasLearningToday) {
+      const upcoming = assignments
+        .filter((a) => !a.is_completed && a.assigned_date >= today)
+        .sort((a, b) => a.assigned_date.localeCompare(b.assigned_date));
+      if (upcoming.length > 0) currentPhase = upcoming[0].phase as 'learning' | 'revision';
+    }
+
+    const { scheduled_assignments: _dropped, ...exam } = row;
+    return { exam: exam as Exam, totalAssignments: total, completedAssignments: completed, currentPhase, progressPercent, revisionTotal, revisionCompleted, revisionPercent };
+  });
+}
+
+export async function renameExam(examId: string, name: string): Promise<void> {
+  const { error } = await supabase.from('exams').update({ name: name.trim() }).eq('id', examId);
+  if (error) throw error;
 }
 
 // Get all exams for the current user
@@ -274,6 +337,34 @@ export async function recalculateSchedule(examId: string): Promise<void> {
   await supabase
     .from('scheduled_assignments')
     .upsert(assignmentsToUpsert, { onConflict: 'exam_id,topic_id,phase' });
+}
+
+// Batch-update multiple assignments in a single round-trip
+export async function batchUpdateAssignmentCompletion(ids: string[], isCompleted: boolean): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from('scheduled_assignments')
+    .update({
+      is_completed: isCompleted,
+      completed_at: isCompleted ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', ids);
+  if (error) throw error;
+}
+
+// Batch-update multiple topics in a single round-trip
+export async function batchUpdateTopicCompletion(topicIds: string[], isCompleted: boolean): Promise<void> {
+  if (topicIds.length === 0) return;
+  const { error } = await supabase
+    .from('topics')
+    .update({
+      is_completed: isCompleted,
+      completed_at: isCompleted ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', topicIds);
+  if (error) throw error;
 }
 
 // Reset all topics and recalculate

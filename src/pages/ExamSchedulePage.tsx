@@ -1,10 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { toast } from '../lib/toast';
+import { useConfirm } from '../hooks/useConfirm';
 import {
   getExamWithDetails,
   updateTopicAssignment,
   updateAssignmentCompletion,
+  updateTopicCompletion,
+  batchUpdateAssignmentCompletion,
+  batchUpdateTopicCompletion,
   updateTopic as updateTopicService,
   deleteTopic as deleteTopicService,
   deleteAssignmentsOnDate,
@@ -30,18 +36,21 @@ import {
   Clock,
   Target,
   BarChart3,
+  Download,
 } from 'lucide-react';
 import { format, parseISO, differenceInDays, isBefore, startOfDay, addDays } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import type { Exam, Topic, DayWeight, ScheduledAssignment } from '../types/database';
 import { TopicEditModal } from '../components/TopicEditModal';
 import { ProgressRing } from '../components/ProgressRing';
-import { StatusBadge, calculateStatus, StatusDescription } from '../components/StatusBadge';
+import { StatusBadge, StatusDescription, type StatusType } from '../components/StatusBadge';
 import { BurnDownChart } from '../components/BurnDownChart';
 import { PhaseBreakdown } from '../components/PhaseBreakdown';
 import { TodayPanel } from '../components/TodayPanel';
 import { StreakBadge } from '../components/StreakBadge';
 import { recordStudyActivity, getStreakData } from '../lib/streakService';
+import { exportToICal } from '../lib/icalExport';
+import { SkeletonCard, SkeletonDayCard } from '../components/Skeleton';
 
 interface ExamWithDetails {
   exam: Exam;
@@ -93,7 +102,8 @@ function TopicCard({
 
   return (
     <Draggable draggableId={`assignment-${assignment.id}`} index={draggableIndex}>
-      {(provided, snapshot) => (
+      {(provided, snapshot) => {
+        const card = (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
@@ -103,17 +113,17 @@ function TopicCard({
           onMouseLeave={onMouseLeave}
           onClick={() => { if (isBulkMode) onSelect(assignment.id); }}
           className={`group relative flex items-start gap-2 p-2 rounded-lg transition cursor-pointer
-            ${snapshot.isDragging ? 'shadow-lg bg-white dark:bg-slate-700 scale-105' : ''}
-            ${assignment.is_completed ? 'bg-slate-50 dark:bg-slate-900/50' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}
-            ${isSelected ? 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : ''}
+            ${snapshot.isDragging ? 'shadow-lg bg-slate-700 scale-105' : ''}
+            ${assignment.is_completed ? 'bg-slate-900/50' : 'hover:bg-slate-700/50'}
+            ${isSelected ? 'ring-2 ring-amber-500 bg-amber-500/10' : ''}
           `}
         >
           {isBulkMode && (
             <div className="absolute -left-1 top-1/2 -translate-y-1/2">
               {isSelected ? (
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
+                <CheckCircle className="w-5 h-5 text-amber-500" />
               ) : (
-                <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+                <div className="w-5 h-5 rounded-full border-2 border-slate-600" />
               )}
             </div>
           )}
@@ -122,16 +132,16 @@ function TopicCard({
             {isUpdating ? (
               <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             ) : assignment.is_completed ? (
-              <CheckCircle className="w-5 h-5 text-emerald-500" />
+              <CheckCircle className="w-5 h-5 text-amber-500" />
             ) : (
-              <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 transition" />
+              <div className="w-5 h-5 rounded-full border-2 border-slate-600 hover:border-amber-500 transition" />
             )}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-1">
               <span className={`text-sm font-medium leading-tight ${
-                assignment.is_completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'
+                assignment.is_completed ? 'text-slate-500 line-through' : 'text-slate-100'
               }`}>
                 {topic.title}
               </span>
@@ -143,7 +153,7 @@ function TopicCard({
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <div className={`w-2 h-2 rounded-full ${EFFORT_COLORS[topic.estimated_effort]}`} />
-              <span className="text-xs text-slate-500 dark:text-slate-400">{EFFORT_LABELS[topic.estimated_effort]}</span>
+              <span className="text-xs text-slate-400">{EFFORT_LABELS[topic.estimated_effort]}</span>
               {wasMoved && (
                 <span className="flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400">
                   <Move className="w-3 h-3" />
@@ -159,7 +169,9 @@ function TopicCard({
             </div>
           )}
         </div>
-      )}
+        );
+        return snapshot.isDragging ? createPortal(card, document.body) : card;
+      }}
     </Draggable>
   );
 }
@@ -199,32 +211,32 @@ function DayCard({
         <div
           ref={provided.innerRef}
           {...provided.droppableProps}
-          className={`bg-white dark:bg-slate-800 rounded-xl border ${
-            isToday ? 'border-emerald-500 ring-2 ring-emerald-500/20'
-            : snapshot.isDraggingOver ? 'border-blue-400 ring-2 ring-blue-400/30'
-            : 'border-slate-200 dark:border-slate-700'
-          } ${isPast ? 'opacity-60' : ''} p-4 transition-shadow ${snapshot.isDraggingOver ? 'shadow-lg' : ''}`}
+          className={`glass-surface rounded-xl ${
+            isToday ? '!border-amber-500 ring-2 ring-amber-500/20'
+            : snapshot.isDraggingOver ? '!border-blue-400 ring-2 ring-blue-400/30'
+            : ''
+          } ${isPast ? 'opacity-60' : ''} p-4 transition-all hover:-translate-y-0.5 ${snapshot.isDraggingOver ? 'shadow-lg' : ''}`}
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+              <div className="text-sm font-medium text-slate-100">
                 {format(dateObj, 'EEE, MMM d')}
               </div>
-              {isToday && <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Today</span>}
+              {isToday && <span className="text-xs text-amber-400 font-medium">Today</span>}
               {isPast && !isToday && <span className="text-xs text-red-500 font-medium">Past</span>}
             </div>
             <div className="flex items-center gap-1.5">
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 isRevision
-                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                  ? 'bg-amber-500/10 text-amber-400'
+                  : 'bg-blue-500/10 text-blue-400'
               }`}>
                 {isRevision ? 'Revision' : 'Learning'}
               </span>
               <button
                 onClick={() => onDeleteTile(date, phase)}
                 title="Delete this date tile"
-                className="p-1 rounded text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -254,7 +266,7 @@ function DayCard({
               );
             })}
             {assignments.length === 0 && (
-              <div className="text-xs text-slate-400 dark:text-slate-500 italic py-2 text-center">
+              <div className="text-xs text-slate-500 italic py-2 text-center">
                 No topics assigned
               </div>
             )}
@@ -262,13 +274,13 @@ function DayCard({
           </div>
 
           {assignments.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-3 pt-2 border-t border-white/[0.08]">
+              <div className="text-xs text-slate-400">
                 {completedCount} / {assignments.length} completed
               </div>
-              <div className="mt-1.5 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div className="mt-1.5 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 transition-all duration-500"
+                  className="h-full bg-amber-500 transition-all duration-500"
                   style={{ width: `${assignments.length > 0 ? (completedCount / assignments.length) * 100 : 0}%` }}
                 />
               </div>
@@ -283,6 +295,7 @@ function DayCard({
 export function ExamSchedulePage() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const { confirm, ConfirmNode } = useConfirm();
   const [data, setData] = useState<ExamWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -304,6 +317,7 @@ export function ExamSchedulePage() {
     learning: new Set(),
     revision: new Set(),
   });
+  const [scheduleBehind, setScheduleBehind] = useState(false);
 
   useEffect(() => {
     if (examId) {
@@ -340,7 +354,8 @@ export function ExamSchedulePage() {
       setLoading(true);
       let result = await getExamWithDetails(id);
 
-      // Auto-recalculate when incomplete topics are stuck on past dates or have no assignment
+      // Auto-recalculate only when incomplete topics have no assignment yet
+      // Stale past assignments show an orange banner instead — preserving user intent
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const completedTopicIds = new Set(result.topics.filter((t) => t.is_completed).map((t) => t.id));
       const assignedTopicIds = new Set(result.assignments.map((a) => a.topic_id));
@@ -349,10 +364,11 @@ export function ExamSchedulePage() {
         (a) => a.assigned_date < todayStr && !completedTopicIds.has(a.topic_id)
       );
       const hasUnassignedIncomplete = incompleteTopicIds.some((id) => !assignedTopicIds.has(id));
-      if (hasStalePastAssignment || hasUnassignedIncomplete) {
+      if (hasUnassignedIncomplete) {
         await recalculateSchedule(id);
         result = await getExamWithDetails(id);
       }
+      setScheduleBehind(hasStalePastAssignment && !hasUnassignedIncomplete);
 
       setData(result);
       setError(null);
@@ -366,9 +382,9 @@ export function ExamSchedulePage() {
 
   const loadStreaks = async () => {
     try {
-      const { currentStreak: cs, longestStreak: ls } = await getStreakData();
-      setCurrentStreak(cs);
-      setLongestStreak(ls);
+      const streakData = await getStreakData();
+      setCurrentStreak(streakData.currentStreak);
+      setLongestStreak(streakData.longestStreak);
     } catch (err) {
       console.error('Failed to load streaks:', err);
     }
@@ -378,11 +394,22 @@ export function ExamSchedulePage() {
     if (!data) return;
     setUpdating(assignmentId);
     try {
-      const updatedAssignment = await updateAssignmentCompletion(assignmentId, !currentStatus);
+      const newStatus = !currentStatus;
+      const updatedAssignment = await updateAssignmentCompletion(assignmentId, newStatus);
       const updatedAssignments = data.assignments.map((a) =>
         a.id === assignmentId ? updatedAssignment : a
       );
-      setData({ ...data, assignments: updatedAssignments });
+
+      // For learning assignments, keep topic.is_completed in sync so confetti fires
+      // and scheduling correctly treats the topic as done
+      let updatedTopics = data.topics;
+      const toggled = data.assignments.find((a) => a.id === assignmentId);
+      if (toggled?.phase === 'learning') {
+        const updatedTopic = await updateTopicCompletion(toggled.topic_id, newStatus);
+        updatedTopics = data.topics.map((t) => t.id === toggled.topic_id ? updatedTopic : t);
+      }
+
+      setData({ ...data, assignments: updatedAssignments, topics: updatedTopics });
 
       // Sync today's completed count for streak tracking
       const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -456,7 +483,8 @@ export function ExamSchedulePage() {
 
   const handleDeleteTile = async (date: string, phase: 'learning' | 'revision') => {
     if (!examId || !data) return;
-    if (!confirm(`Delete the ${date} ${phase} tile? Any topics on it will be unscheduled.`)) return;
+    const ok = await confirm({ message: `Delete the ${date} ${phase} tile? Topics on it will be unscheduled.`, confirmLabel: 'Delete' });
+    if (!ok) return;
     try {
       await deleteAssignmentsOnDate(examId, date, phase);
       setActiveSlots((prev) => {
@@ -470,8 +498,10 @@ export function ExamSchedulePage() {
           (a) => !(a.assigned_date === date && a.phase === phase)
         ),
       });
+      toast.success('Tile deleted');
     } catch (err) {
       console.error('Failed to delete tile:', err);
+      toast.error('Failed to delete tile');
     }
   };
 
@@ -504,36 +534,48 @@ export function ExamSchedulePage() {
   };
 
   const handleRecalculate = async () => {
-    if (!examId || !confirm('Recalculate schedule? This will redistribute incomplete topics.')) return;
+    if (!examId) return;
+    const ok = await confirm({ message: 'Recalculate schedule? This will redistribute all incomplete topics.', confirmLabel: 'Recalculate', danger: false });
+    if (!ok) return;
     try {
       setLoading(true);
       await recalculateSchedule(examId);
       await loadExam(examId);
+      toast.success('Schedule recalculated');
     } catch (err) {
       console.error('Failed to recalculate:', err);
+      toast.error('Failed to recalculate schedule');
       setError('Failed to recalculate schedule');
     }
   };
 
   const handleReset = async () => {
-    if (!examId || !confirm('Reset all progress? This will mark all topics incomplete and recalculate.')) return;
+    if (!examId) return;
+    const ok = await confirm({ message: 'Reset all progress? All topics will be marked incomplete and the schedule will be rebuilt.', confirmLabel: 'Reset' });
+    if (!ok) return;
     try {
       setLoading(true);
       await resetSchedule(examId);
       await loadExam(examId);
+      toast.success('Progress reset');
     } catch (err) {
       console.error('Failed to reset:', err);
+      toast.error('Failed to reset schedule');
       setError('Failed to reset schedule');
     }
   };
 
   const handleDelete = async () => {
-    if (!examId || !data || !confirm(`Delete "${data.exam.name}"? This cannot be undone.`)) return;
+    if (!examId || !data) return;
+    const ok = await confirm({ message: `Delete "${data.exam.name}"? This cannot be undone.`, confirmLabel: 'Delete Plan' });
+    if (!ok) return;
     try {
       await deleteExam(examId);
+      toast.success('Study plan deleted');
       navigate('/');
     } catch (err) {
       console.error('Failed to delete:', err);
+      toast.error('Failed to delete study plan');
       setError('Failed to delete study plan');
     }
   };
@@ -546,14 +588,18 @@ export function ExamSchedulePage() {
         ...data,
         topics: data.topics.map((t) => (t.id === topicId ? updated : t)),
       });
+      toast.success('Topic updated');
     } catch (err) {
       console.error('Failed to update topic:', err);
+      toast.error('Failed to update topic');
     }
     setEditingTopic(null);
   };
 
   const handleTopicDelete = async (topicId: string) => {
-    if (!data || !confirm('Delete this topic?')) return;
+    if (!data) return;
+    const ok = await confirm({ message: 'Delete this topic? All its assignments will also be removed.', confirmLabel: 'Delete' });
+    if (!ok) return;
     try {
       await deleteTopicService(topicId);
       setData({
@@ -561,8 +607,10 @@ export function ExamSchedulePage() {
         topics: data.topics.filter((t) => t.id !== topicId),
         assignments: data.assignments.filter((a) => a.topic_id !== topicId),
       });
+      toast.success('Topic deleted');
     } catch (err) {
       console.error('Failed to delete topic:', err);
+      toast.error('Failed to delete topic');
     }
     setEditingTopic(null);
   };
@@ -580,15 +628,30 @@ export function ExamSchedulePage() {
   const handleBulkComplete = async (complete: boolean) => {
     if (!data || selectedAssignments.size === 0) return;
     try {
-      await Promise.all(
-        Array.from(selectedAssignments).map((id) => updateAssignmentCompletion(id, complete))
-      );
+      const ids = Array.from(selectedAssignments);
+      await batchUpdateAssignmentCompletion(ids, complete);
+
+      // Also sync topic.is_completed for any selected learning assignments
+      const selectedLearningTopicIds = data.assignments
+        .filter((a) => ids.includes(a.id) && a.phase === 'learning')
+        .map((a) => a.topic_id);
+      if (selectedLearningTopicIds.length > 0) {
+        await batchUpdateTopicCompletion(selectedLearningTopicIds, complete);
+      }
+
+      const now = new Date().toISOString();
+      const updatedTopicIds = new Set(selectedLearningTopicIds);
       setData({
         ...data,
         assignments: data.assignments.map((a) =>
           selectedAssignments.has(a.id)
-            ? { ...a, is_completed: complete, completed_at: complete ? new Date().toISOString() : null }
+            ? { ...a, is_completed: complete, completed_at: complete ? now : null }
             : a
+        ),
+        topics: data.topics.map((t) =>
+          updatedTopicIds.has(t.id)
+            ? { ...t, is_completed: complete, completed_at: complete ? now : null }
+            : t
         ),
       });
       setSelectedAssignments(new Set());
@@ -656,21 +719,29 @@ export function ExamSchedulePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+      <div className="min-h-screen">
+        <div className="h-16 bg-slate-800 border-b border-slate-700" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[...Array(8)].map((_, i) => <SkeletonDayCard key={i} />)}
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-slate-600 dark:text-slate-400">{error || 'Study plan not found'}</p>
+          <p className="text-slate-400">{error || 'Study plan not found'}</p>
           <button
             onClick={() => navigate('/')}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg"
+            className="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition"
           >
             Go Home
           </button>
@@ -679,6 +750,7 @@ export function ExamSchedulePage() {
     );
   }
 
+  const learningOnly = data.assignments.filter((a) => a.phase === 'learning');
   const completedAssignments = data.assignments.filter((a) => a.is_completed).length;
   const totalAssignments = data.assignments.length;
   const progressPercentage = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
@@ -691,12 +763,11 @@ export function ExamSchedulePage() {
     (a) => a.is_completed && a.completed_at && format(parseISO(a.completed_at), 'yyyy-MM-dd') === todayStr
   ).length;
 
-  // Calculate phase stats
-  const learningAssignments = data.assignments.filter((a) => a.phase === 'learning');
+  // Calculate phase stats (learningOnly already computed above)
   const revisionAssignments = data.assignments.filter((a) => a.phase === 'revision');
 
-  const learningCompleted = learningAssignments.filter((a) => a.is_completed).length;
-  const learningTotal = learningAssignments.length;
+  const learningCompleted = learningOnly.filter((a) => a.is_completed).length;
+  const learningTotal = learningOnly.length;
   const revisionCompleted = revisionAssignments.filter((a) => a.is_completed).length;
   const revisionTotal = revisionAssignments.length;
 
@@ -706,19 +777,16 @@ export function ExamSchedulePage() {
     ? Math.ceil(assignmentsRemaining / studyDaysLeft)
     : 0;
 
-  // Calculate status (ahead/on-track/behind)
-  const totalDays = differenceInDays(new Date(data.exam.exam_date), new Date(data.exam.created_at));
-  const daysElapsed = differenceInDays(new Date(), new Date(data.exam.created_at));
-  const status = calculateStatus(progressPercentage, daysElapsed, totalDays);
-
-  // Calculate days difference for status badge
-  const expectedProgress = totalDays > 0 ? (daysElapsed / totalDays) * 100 : 0;
-  const progressDiff = progressPercentage - expectedProgress;
-  const daysDiff = totalDays > 0 ? Math.round((progressDiff / 100) * totalDays) : 0;
+  // Schedule-based status: compare completed vs what was assigned by today
+  const scheduledByToday = data.assignments.filter((a) => a.assigned_date <= todayStr).length;
+  const scheduleDiff = completedAssignments - scheduledByToday;
+  const status: StatusType = scheduleDiff >= 2 ? 'ahead' : scheduleDiff >= -1 ? 'on-track' : 'behind';
+  const daysDiff = Math.abs(scheduleDiff);
 
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen page-enter">
+      {ConfirmNode}
       <Header examName={data.exam.name} />
 
       {/* Context Menu */}
@@ -728,16 +796,13 @@ export function ExamSchedulePage() {
         const canRestore = assignment && assignment.assigned_date !== assignment.recommended_date;
         return (
           <div
-            className="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1 min-w-48"
+            className="fixed z-50 glass-surface rounded-lg shadow-xl py-1 min-w-48"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={() => {
-                if (topic) setEditingTopic(topic);
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              onClick={() => { if (topic) setEditingTopic(topic); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
             >
               <Edit3 className="w-4 h-4" />
               Edit Topic
@@ -745,18 +810,16 @@ export function ExamSchedulePage() {
             {canRestore && (
               <button
                 onClick={() => handleRestoreTopic(contextMenu.assignmentId)}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
               >
                 <Undo2 className="w-4 h-4" />
                 Restore to {format(parseISO(assignment!.recommended_date), 'MMM d')}
               </button>
             )}
-            <hr className="my-1 border-slate-200 dark:border-slate-700" />
+            <hr className="my-1 border-slate-700" />
             <button
-              onClick={() => {
-                if (topic) handleTopicDelete(topic.id);
-              }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+              onClick={() => { if (topic) handleTopicDelete(topic.id); }}
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
             >
               <Trash2 className="w-4 h-4" />
               Delete Topic
@@ -777,13 +840,13 @@ export function ExamSchedulePage() {
       )}
 
       {/* Sub-header with actions */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+      <div className="glass-banner">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between min-h-14 py-2 flex-wrap gap-2">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/')}
-                className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span className="text-sm">Back</span>
@@ -797,8 +860,8 @@ export function ExamSchedulePage() {
                 }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   isBulkMode
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : 'text-slate-400 hover:bg-slate-700'
                 }`}
               >
                 <Check className="w-4 h-4" />
@@ -808,12 +871,10 @@ export function ExamSchedulePage() {
               {/* Bulk actions */}
               {isBulkMode && selectedAssignments.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {selectedAssignments.size} selected
-                  </span>
+                  <span className="text-sm text-slate-300">{selectedAssignments.size} selected</span>
                   <button
                     onClick={() => handleBulkComplete(true)}
-                    className="px-3 py-1 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                    className="px-3 py-1 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
                   >
                     Mark Complete
                   </button>
@@ -836,7 +897,7 @@ export function ExamSchedulePage() {
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
+                className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
@@ -844,34 +905,37 @@ export function ExamSchedulePage() {
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-20 py-1">
+                  <div className="absolute right-0 mt-2 w-48 glass-surface rounded-lg shadow-lg z-20 py-1">
                     <button
                       onClick={() => {
                         setShowMenu(false);
-                        handleRecalculate();
+                        exportToICal(data.exam, data.topics, data.assignments);
+                        toast.success('Calendar exported');
                       }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export to iCal
+                    </button>
+                    <hr className="my-1 border-slate-700" />
+                    <button
+                      onClick={() => { setShowMenu(false); handleRecalculate(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Recalculate
                     </button>
                     <button
-                      onClick={() => {
-                        setShowMenu(false);
-                        handleReset();
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      onClick={() => { setShowMenu(false); handleReset(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
                     >
                       <RotateCcw className="w-4 h-4" />
                       Reset Progress
                     </button>
-                    <hr className="my-1 border-slate-200 dark:border-slate-700" />
+                    <hr className="my-1 border-slate-700" />
                     <button
-                      onClick={() => {
-                        setShowMenu(false);
-                        handleDelete();
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      onClick={() => { setShowMenu(false); handleDelete(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete Plan
@@ -884,144 +948,53 @@ export function ExamSchedulePage() {
         </div>
       </div>
 
+      {/* Schedule Behind Banner */}
+      {scheduleBehind && (
+        <div className="bg-orange-900/20 border-b border-orange-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0" />
+              <p className="text-sm text-orange-300 font-medium">
+                Your schedule has fallen behind — some topics are still assigned to past dates.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setScheduleBehind(false);
+                handleRecalculate();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex-shrink-0 transition"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Recalculate
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Today's Plan Panel */}
-        <TodayPanel
-          topics={data.topics}
-          assignments={data.assignments}
-          updating={updating}
-          onToggle={handleToggleComplete}
-        />
-
-        {/* Dashboard Section */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Progress Dashboard</h2>
-            </div>
-            <StreakBadge currentStreak={currentStreak} longestStreak={longestStreak} />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3 mb-6">
-            {/* Progress Ring & Status Card */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <StatusBadge status={status} daysDiff={daysDiff} />
-                  <div className="mt-2">
-                    <StatusDescription status={status} />
-                  </div>
-                  <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <Target className="w-4 h-4" />
-                      <span>{completedAssignments} / {totalAssignments} tasks done</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <Calendar className="w-4 h-4" />
-                      <span>{daysRemaining} days left</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <Clock className="w-4 h-4" />
-                      <span>~{dailyPace} topics/day needed</span>
-                    </div>
-                  </div>
-                </div>
-                <ProgressRing
-                  percentage={progressPercentage}
-                  size={110}
-                  strokeWidth={8}
-                  color={progressPercentage >= 100 ? 'emerald' : progressPercentage >= 50 ? 'blue' : 'amber'}
-                />
-              </div>
-            </div>
-
-            {/* Quick Stats Cards */}
-            <div className="grid grid-cols-2 gap-4 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Completed Today</div>
-                <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {completedToday}
-                </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {completedToday > 0 ? 'Great progress!' : 'Start checking off topics!'}
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Learning Progress</div>
-                <div className="text-3xl font-bold text-orange-500">
-                  {learningTotal > 0 ? Math.round((learningCompleted / learningTotal) * 100) : 0}%
-                </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {learningCompleted} / {learningTotal} topics
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Study Days Left</div>
-                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                  {studyDaysLeft}
-                </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  with your schedule
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Revision Progress</div>
-                <div className="text-3xl font-bold text-emerald-500">
-                  {revisionTotal > 0 ? Math.round((revisionCompleted / revisionTotal) * 100) : 0}%
-                </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {revisionCompleted} / {revisionTotal} topics
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Row */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Burn-Down Chart */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">
-                Topic Burn-Down
-              </h3>
-              <BurnDownChart
-                examDate={data.exam.exam_date}
-                createdAt={data.exam.created_at}
-                totalTopics={totalTopics}
-                completions={assignmentCompletions}
-              />
-            </div>
-
-            {/* Phase Breakdown */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">
-                Phase Breakdown
-              </h3>
-              <PhaseBreakdown
-                learningCompleted={learningCompleted}
-                learningTotal={learningTotal}
-                revisionCompleted={revisionCompleted}
-                revisionTotal={revisionTotal}
-                unassigned={0}
-              />
-            </div>
-          </div>
-        </section>
+        {/* Today's Plan */}
+        <div className="mb-8">
+          <TodayPanel
+            topics={data.topics}
+            assignments={data.assignments}
+            updating={updating}
+            onToggle={handleToggleComplete}
+          />
+        </div>
 
         {/* Calendar Section */}
-        <section>
+        <section className="mb-8">
 
         {/* Drag and Drop Calendar */}
         <DragDropContext onDragEnd={handleDragEnd}>
           {/* Learning Phase */}
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Learning Phase</h2>
-              <span className="text-sm text-slate-500 dark:text-slate-400">
-                ({dayCards.learning.length} days)
-              </span>
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <h2 className="text-lg font-semibold text-slate-100">Learning Phase</h2>
+              <span className="text-sm text-slate-400">({dayCards.learning.length} days)</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {dayCards.learning.map(({ date, assignments }) => (
@@ -1049,12 +1022,12 @@ export function ExamSchedulePage() {
           {/* Phase Divider */}
           {dayCards.revision.length > 0 && (
             <div className="flex items-center gap-4 my-8">
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+              <div className="flex items-center gap-2 text-slate-400">
                 <Calendar className="w-4 h-4" />
                 <span className="text-sm font-medium">Revision Phase Starts</span>
               </div>
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
             </div>
           )}
 
@@ -1062,9 +1035,9 @@ export function ExamSchedulePage() {
           {dayCards.revision.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Revision Phase</h2>
-                <span className="text-sm text-slate-500 dark:text-slate-400">({dayCards.revision.length} days)</span>
+                <div className="w-3 h-3 rounded-full bg-amber-500" />
+                <h2 className="text-lg font-semibold text-slate-100">Revision Phase</h2>
+                <span className="text-sm text-slate-400">({dayCards.revision.length} days)</span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {dayCards.revision.map(({ date, assignments }) => (
@@ -1092,14 +1065,121 @@ export function ExamSchedulePage() {
         </DragDropContext>
         </section>
 
+        {/* Dashboard Section */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-slate-400" />
+              <h2 className="text-lg font-semibold text-slate-100">Progress Dashboard</h2>
+            </div>
+            <StreakBadge currentStreak={currentStreak} longestStreak={longestStreak} />
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3 mb-6">
+            {/* Progress Ring & Status Card */}
+            <div className="glass-surface rounded-xl p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <StatusBadge status={status} />
+                  <div className="mt-2">
+                    <StatusDescription status={status} />
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Target className="w-4 h-4" />
+                      <span>{completedAssignments} / {totalAssignments} tasks done</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Calendar className="w-4 h-4" />
+                      <span>{daysRemaining} days left</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Clock className="w-4 h-4" />
+                      <span>~{dailyPace} topics/day needed</span>
+                    </div>
+                  </div>
+                </div>
+                <ProgressRing
+                  percentage={progressPercentage}
+                  size={110}
+                  strokeWidth={8}
+                />
+              </div>
+            </div>
+
+            {/* Quick Stats Cards */}
+            <div className="grid grid-cols-2 gap-4 lg:col-span-2">
+              <div className="glass-surface rounded-xl p-4">
+                <div className="text-sm text-slate-400 font-medium mb-1">Completed Today</div>
+                <div className="text-3xl font-bold text-amber-400">{completedToday}</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {completedToday > 0 ? 'Great progress!' : 'Start checking off topics!'}
+                </div>
+              </div>
+              <div className="glass-surface rounded-xl p-4">
+                <div className="text-sm text-slate-400 font-medium mb-1">Learning Progress</div>
+                <div className="text-3xl font-bold text-blue-400">
+                  {learningTotal > 0 ? Math.round((learningCompleted / learningTotal) * 100) : 0}%
+                </div>
+                <div className="text-xs text-slate-400 mt-1">{learningCompleted} / {learningTotal} topics</div>
+              </div>
+              <div className="glass-surface rounded-xl p-4">
+                <div className="text-sm text-slate-400 font-medium mb-1">Study Days Left</div>
+                <div className="text-3xl font-bold text-violet-400">{studyDaysLeft}</div>
+                <div className="text-xs text-slate-400 mt-1">with your schedule</div>
+              </div>
+              <div className="glass-surface rounded-xl p-4">
+                <div className="text-sm text-slate-400 font-medium mb-1">Revision Progress</div>
+                <div className="text-3xl font-bold text-amber-500">
+                  {revisionTotal > 0 ? Math.round((revisionCompleted / revisionTotal) * 100) : 0}%
+                </div>
+                <div className="text-xs text-slate-400 mt-1">{revisionCompleted} / {revisionTotal} topics</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Burn-Down Chart */}
+            <div className="glass-surface rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-slate-100 mb-4">
+                Progress Over Time
+              </h3>
+              <BurnDownChart
+                examDate={data.exam.exam_date}
+                createdAt={data.exam.created_at}
+                totalTopics={totalTopics}
+                completions={assignmentCompletions}
+              />
+            </div>
+
+            {/* Phase Breakdown */}
+            <div className="glass-surface rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-slate-100 mb-4">
+                Phase Breakdown
+              </h3>
+              <PhaseBreakdown
+                learningCompleted={learningCompleted}
+                learningTotal={learningTotal}
+                revisionCompleted={revisionCompleted}
+                revisionTotal={revisionTotal}
+                unassigned={0}
+              />
+            </div>
+          </div>
+
+        </section>
+
         {/* Empty state hint */}
         {dayCards.learning.length === 0 && dayCards.revision.length === 0 && (
           <div className="text-center py-12">
-            <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-500 dark:text-slate-400">No topics scheduled yet</p>
+            <Calendar className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-400">No topics scheduled yet</p>
           </div>
         )}
       </main>
     </div>
   );
 }
+
+

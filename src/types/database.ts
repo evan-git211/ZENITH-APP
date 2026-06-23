@@ -57,6 +57,7 @@ export interface Todo {
   is_completed: boolean;
   timer_minutes: number | null;
   created_at: string;
+  completed_at: string | null;
 }
 
 export interface Milestone {

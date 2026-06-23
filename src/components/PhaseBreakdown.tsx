@@ -57,7 +57,8 @@ export function PhaseBreakdown({
               borderRadius: '8px',
               color: 'white',
             }}
-            formatter={(value: number) => [`${value} topics`, '']}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any) => [value != null ? `${value} topics` : '0 topics', '']}
           />
         </PieChart>
       </ResponsiveContainer>
