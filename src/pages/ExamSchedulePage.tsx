@@ -13,6 +13,7 @@ import {
   batchUpdateTopicCompletion,
   updateTopic as updateTopicService,
   deleteTopic as deleteTopicService,
+  createTopic as createTopicService,
   deleteAssignmentsOnDate,
   recalculateSchedule,
   resetSchedule,
@@ -37,6 +38,7 @@ import {
   Target,
   BarChart3,
   Download,
+  Plus,
 } from 'lucide-react';
 import { format, parseISO, differenceInDays, isBefore, startOfDay, addDays } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -318,6 +320,10 @@ export function ExamSchedulePage() {
     revision: new Set(),
   });
   const [scheduleBehind, setScheduleBehind] = useState(false);
+  const [showAddTopic, setShowAddTopic] = useState(false);
+  const [addTopicTitle, setAddTopicTitle] = useState('');
+  const [addTopicEffort, setAddTopicEffort] = useState(3);
+  const [addingTopic, setAddingTopic] = useState(false);
 
   useEffect(() => {
     if (examId) {
@@ -615,6 +621,25 @@ export function ExamSchedulePage() {
     setEditingTopic(null);
   };
 
+  const handleAddTopic = async () => {
+    if (!examId || !addTopicTitle.trim()) return;
+    setAddingTopic(true);
+    try {
+      await createTopicService(examId, addTopicTitle.trim(), addTopicEffort);
+      await recalculateSchedule(examId);
+      await loadExam(examId);
+      setAddTopicTitle('');
+      setAddTopicEffort(3);
+      setShowAddTopic(false);
+      toast.success('Topic added and schedule updated');
+    } catch (err) {
+      console.error('Failed to add topic:', err);
+      toast.error('Failed to add topic');
+    } finally {
+      setAddingTopic(false);
+    }
+  };
+
   const toggleAssignmentSelection = (assignmentId: string) => {
     const newSelected = new Set(selectedAssignments);
     if (newSelected.has(assignmentId)) {
@@ -781,12 +806,88 @@ export function ExamSchedulePage() {
   const scheduledByToday = data.assignments.filter((a) => a.assigned_date <= todayStr).length;
   const scheduleDiff = completedAssignments - scheduledByToday;
   const status: StatusType = scheduleDiff >= 2 ? 'ahead' : scheduleDiff >= -1 ? 'on-track' : 'behind';
-  const daysDiff = Math.abs(scheduleDiff);
+
 
 
   return (
     <div className="min-h-screen page-enter">
       {ConfirmNode}
+
+      {/* Add Topic Modal */}
+      {showAddTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowAddTopic(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md glass-surface rounded-2xl p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-slate-100">Add Topic</h3>
+              <button onClick={() => setShowAddTopic(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700 transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1.5">Topic title</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={addTopicTitle}
+                  onChange={(e) => setAddTopicTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddTopic(); if (e.key === 'Escape') setShowAddTopic(false); }}
+                  placeholder="e.g. Chapter 5 — Cell Biology"
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                  Effort — <span className="text-amber-400">{EFFORT_LABELS[addTopicEffort]}</span>
+                </label>
+                <div className="flex gap-2">
+                  {([1, 2, 3, 4, 5] as const).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setAddTopicEffort(n)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold transition border ${
+                        addTopicEffort === n
+                          ? 'border-amber-500 bg-amber-500/15 text-amber-400'
+                          : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex justify-between mt-1 px-0.5">
+                  <span className="text-xs text-slate-500">Easy</span>
+                  <span className="text-xs text-slate-500">Hard</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={handleAddTopic}
+                  disabled={!addTopicTitle.trim() || addingTopic}
+                  className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {addingTopic ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add Topic
+                </button>
+                <button
+                  onClick={() => setShowAddTopic(false)}
+                  className="px-4 py-2.5 rounded-lg border border-slate-700 text-slate-400 text-sm hover:bg-slate-700 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Header examName={data.exam.name} />
 
       {/* Context Menu */}
@@ -866,6 +967,15 @@ export function ExamSchedulePage() {
               >
                 <Check className="w-4 h-4" />
                 Bulk Select
+              </button>
+
+              {/* Add Topic */}
+              <button
+                onClick={() => setShowAddTopic(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-700 transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add Topic
               </button>
 
               {/* Bulk actions */}

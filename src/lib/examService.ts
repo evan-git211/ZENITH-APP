@@ -256,6 +256,17 @@ export async function updateTopic(
   return data;
 }
 
+// Create a new topic for an existing exam (caller should recalculate after)
+export async function createTopic(examId: string, title: string, estimatedEffort: number): Promise<Topic> {
+  const { data, error } = await supabase
+    .from('topics')
+    .insert({ exam_id: examId, title, estimated_effort: estimatedEffort })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // Delete a topic
 export async function deleteTopic(topicId: string): Promise<void> {
   const { error } = await supabase.from('topics').delete().eq('id', topicId);

@@ -213,6 +213,10 @@ export function TodoTab() {
   const [showTodoForm, setShowTodoForm] = useState(false);
   const [newTodoTitle, setNewTodoTitle] = useState('');
 
+  // Inline edit state
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
   // Completed section
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -322,6 +326,21 @@ export function TodoTab() {
       console.error('Failed to toggle todo:', err);
     }
   }, []);
+
+  const handleSaveTodoEdit = async (id: string) => {
+    const trimmed = editingTitle.trim();
+    setEditingTodoId(null);
+    if (!trimmed) return;
+    const todo = todos.find((t) => t.id === id);
+    if (!todo || trimmed === todo.title) return;
+    try {
+      const updated = await updateTodo(id, { title: trimmed });
+      setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } catch (err) {
+      console.error('Failed to rename todo:', err);
+      toast.error('Failed to rename to-do');
+    }
+  };
 
   const handleDeleteTodo = async (id: string) => {
     if (activeTimerTodoId === id) handleStopTimer();
@@ -572,9 +591,35 @@ export function TodoTab() {
         </button>
 
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${todo.is_completed ? 'text-neutral-500 line-through' : 'text-neutral-100'}`}>
-            {todo.title}
-          </p>
+          {editingTodoId === todo.id ? (
+            <input
+              autoFocus
+              type="text"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onBlur={() => handleSaveTodoEdit(todo.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveTodoEdit(todo.id);
+                if (e.key === 'Escape') setEditingTodoId(null);
+              }}
+              className="w-full bg-transparent border-b border-amber-500 text-sm font-medium text-neutral-100 focus:outline-none pb-0.5"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <div className="flex items-center gap-1 group/title">
+              <p className={`text-sm font-medium truncate ${todo.is_completed ? 'text-neutral-500 line-through' : 'text-neutral-100'}`}>
+                {todo.title}
+              </p>
+              {!todo.is_completed && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditingTodoId(todo.id); setEditingTitle(todo.title); }}
+                  className="flex-shrink-0 opacity-0 group-hover/title:opacity-100 transition p-0.5 text-neutral-600 hover:text-amber-400"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3 flex-wrap">
             {dlInfo && (
               <p className={`text-xs flex items-center gap-1 mt-0.5 ${urgencyClasses[dlInfo.urgency]}`}>
