@@ -324,6 +324,8 @@ export function ExamSchedulePage() {
   const [addTopicTitle, setAddTopicTitle] = useState('');
   const [addTopicEffort, setAddTopicEffort] = useState(3);
   const [addingTopic, setAddingTopic] = useState(false);
+  const [addingTilePhase, setAddingTilePhase] = useState<'learning' | 'revision' | null>(null);
+  const [newTileDate, setNewTileDate] = useState('');
 
   useEffect(() => {
     if (examId) {
@@ -619,6 +621,21 @@ export function ExamSchedulePage() {
       toast.error('Failed to delete topic');
     }
     setEditingTopic(null);
+  };
+
+  const handleAddTile = (phase: 'learning' | 'revision') => {
+    if (!newTileDate) return;
+    if (activeSlots[phase].has(newTileDate)) {
+      toast.error('That date already has a tile in this phase');
+      return;
+    }
+    setActiveSlots((prev) => {
+      const updated = new Set(prev[phase]);
+      updated.add(newTileDate);
+      return { ...prev, [phase]: updated };
+    });
+    setNewTileDate('');
+    setAddingTilePhase(null);
   };
 
   const handleAddTopic = async () => {
@@ -1127,6 +1144,40 @@ export function ExamSchedulePage() {
                 />
               ))}
             </div>
+            {/* Add date tile — learning */}
+            {addingTilePhase === 'learning' ? (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  autoFocus
+                  type="date"
+                  value={newTileDate}
+                  onChange={(e) => setNewTileDate(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddTile('learning'); if (e.key === 'Escape') { setAddingTilePhase(null); setNewTileDate(''); } }}
+                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={() => handleAddTile('learning')}
+                  disabled={!newTileDate}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition disabled:opacity-50"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setAddingTilePhase(null); setNewTileDate(''); }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-400 text-sm hover:bg-slate-600 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setAddingTilePhase('learning'); setNewTileDate(''); }}
+                className="mt-3 flex items-center gap-1.5 text-sm text-slate-500 hover:text-blue-400 transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add date tile
+              </button>
+            )}
           </div>
 
           {/* Phase Divider */}
@@ -1170,6 +1221,40 @@ export function ExamSchedulePage() {
                   />
                 ))}
               </div>
+              {/* Add date tile — revision */}
+              {addingTilePhase === 'revision' ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="date"
+                    value={newTileDate}
+                    onChange={(e) => setNewTileDate(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddTile('revision'); if (e.key === 'Escape') { setAddingTilePhase(null); setNewTileDate(''); } }}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    onClick={() => handleAddTile('revision')}
+                    disabled={!newTileDate}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-medium transition disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => { setAddingTilePhase(null); setNewTileDate(''); }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-400 text-sm hover:bg-slate-600 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingTilePhase('revision'); setNewTileDate(''); }}
+                  className="mt-3 flex items-center gap-1.5 text-sm text-slate-500 hover:text-amber-400 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add date tile
+                </button>
+              )}
             </div>
           )}
         </DragDropContext>
