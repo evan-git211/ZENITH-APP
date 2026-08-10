@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { format as dfFormat } from 'date-fns';
+import { startOfDayInTz, getBrowserTimezone } from '../lib/dateUtils';
 
 export type AccentColor = 'amber' | 'blue' | 'violet' | 'emerald' | 'rose';
 export type DateFormatPref = 'medium' | 'us' | 'eu';
@@ -24,6 +25,7 @@ export const PREF_KEYS = {
   revisionDays: 'zenith_default_revision_days',
   reminderTime: 'zenith_reminder_time',
   dailyGoal:    'zenith_daily_goal',
+  timezone:     'zenith_timezone',
 } as const;
 
 function read<T>(key: string, fallback: T): T {
@@ -55,6 +57,9 @@ interface PreferencesContextType {
   setReminderTime: (v: string) => void;
   dailyGoal: number;
   setDailyGoal: (v: number) => void;
+  timezone: string;
+  setTimezone: (v: string) => void;
+  todayStart: () => Date;
   fmtDate: (date: Date | string) => string;
 }
 
@@ -68,6 +73,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [defaultRevisionDays, setRevState] = useState<number>(() => read(PREF_KEYS.revisionDays, 7));
   const [reminderTime, setReminderState]   = useState<string>(() => read(PREF_KEYS.reminderTime, ''));
   const [dailyGoal, setGoalState]          = useState<number>(() => read(PREF_KEYS.dailyGoal, 0));
+  const [timezone, setTimezoneState]       = useState<string>(() => read(PREF_KEYS.timezone, getBrowserTimezone()));
 
   // Accent color → html class
   useEffect(() => {
@@ -107,6 +113,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const setDefaultRevisionDays = (v: number)          => { setRevState(v);       write(PREF_KEYS.revisionDays, v); };
   const setReminderTime      = (v: string)            => { setReminderState(v);  write(PREF_KEYS.reminderTime, v); };
   const setDailyGoal         = (v: number)            => { setGoalState(v);      write(PREF_KEYS.dailyGoal, v); };
+  const setTimezone          = (v: string)            => { setTimezoneState(v);  write(PREF_KEYS.timezone, v); };
+  const todayStart           = useCallback(() => startOfDayInTz(timezone), [timezone]);
 
   const fmtDate = useCallback(
     (date: Date | string) => dfFormat(
@@ -125,6 +133,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       defaultRevisionDays, setDefaultRevisionDays,
       reminderTime, setReminderTime,
       dailyGoal, setDailyGoal,
+      timezone, setTimezone,
+      todayStart,
       fmtDate,
     }}>
       {children}

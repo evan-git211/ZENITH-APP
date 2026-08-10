@@ -34,8 +34,8 @@ function getGreeting(): string {
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────
-function statusLabel(progress: ExamProgress) {
-  const days = differenceInDays(new Date(progress.exam.exam_date), new Date());
+function statusLabel(progress: ExamProgress, today: Date) {
+  const days = differenceInDays(new Date(progress.exam.exam_date), today);
   if (days < 0) return 'Past due';
   if (days === 0) return 'Exam today!';
   if (progress.currentPhase === 'complete') return 'Complete';
@@ -43,8 +43,8 @@ function statusLabel(progress: ExamProgress) {
   return `${days}d left`;
 }
 
-function statusColor(progress: ExamProgress) {
-  const days = differenceInDays(new Date(progress.exam.exam_date), new Date());
+function statusColor(progress: ExamProgress, today: Date) {
+  const days = differenceInDays(new Date(progress.exam.exam_date), today);
   if (days < 0) return 'text-neutral-500';
   if (days === 0) return 'text-amber-400';
   if (progress.currentPhase === 'complete') return 'text-emerald-400';
@@ -54,7 +54,7 @@ function statusColor(progress: ExamProgress) {
 
 export function HomePage() {
   const { user } = useAuth();
-  const { fmtDate, dailyGoal } = usePreferences();
+  const { fmtDate, dailyGoal, todayStart } = usePreferences();
   const navigate = useNavigate();
   const { confirm, ConfirmNode } = useConfirm();
 
@@ -284,7 +284,7 @@ export function HomePage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {exams.map((ep) => {
                   const { exam } = ep;
-                  const daysLeft = differenceInDays(new Date(exam.exam_date), new Date());
+                  const daysLeft = differenceInDays(new Date(exam.exam_date), todayStart());
                   const isPast = daysLeft < 0;
                   return (
                     <div
@@ -364,7 +364,7 @@ export function HomePage() {
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-neutral-600" />
-                          <span className={`text-xs font-medium ${statusColor(ep)}`}>{statusLabel(ep)}</span>
+                          <span className={`text-xs font-medium ${statusColor(ep, todayStart())}`}>{statusLabel(ep, todayStart())}</span>
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           ep.currentPhase === 'complete'
@@ -443,7 +443,7 @@ export function HomePage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {milestones.map(milestone => {
-                  const daysLeft = differenceInDays(parseISO(milestone.target_date), new Date());
+                  const daysLeft = differenceInDays(parseISO(milestone.target_date), todayStart());
                   const isPast = daysLeft < 0;
                   const isToday = daysLeft === 0;
                   const isSoon = !isPast && daysLeft <= 7;

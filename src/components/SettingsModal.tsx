@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X, User, Palette, Calendar, Bell, Shield,
   Check, Loader2, Eye, EyeOff, AlertTriangle, Sparkles, Camera, Trash2,
@@ -75,6 +75,17 @@ export function SettingsModal({ onClose }: Props) {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+
+  // ── Timezone filter ────────────────────────────────────────────────────
+  const [tzSearch, setTzSearch] = useState('');
+  const allTimezones = useMemo(() => {
+    try { return Intl.supportedValuesOf('timeZone'); }
+    catch { return ['UTC', 'America/New_York', 'Europe/London', 'Asia/Kolkata', 'Australia/Sydney']; }
+  }, []);
+  const filteredTimezones = useMemo(
+    () => tzSearch ? allTimezones.filter(tz => tz.toLowerCase().includes(tzSearch.toLowerCase())) : allTimezones,
+    [tzSearch, allTimezones]
+  );
 
   // ── Study schedule state ───────────────────────────────────────────────
   const [dayWeights, setDayWeights] = useState(loadDefaultDayWeights);
@@ -420,6 +431,33 @@ export function SettingsModal({ onClose }: Props) {
                     >
                       <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${prefs.compactMode ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-200 mb-1">Timezone</h3>
+                    <p className="text-xs text-neutral-500 mb-3">
+                      Used to calculate "today" correctly — affects days-remaining countdowns and date tiles.
+                    </p>
+                    <input
+                      type="text"
+                      value={tzSearch}
+                      onChange={e => setTzSearch(e.target.value)}
+                      placeholder="Filter timezones…"
+                      className="w-full px-3 py-2 rounded-lg border border-neutral-700 bg-neutral-950 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-neutral-600 mb-2"
+                    />
+                    <select
+                      value={prefs.timezone}
+                      onChange={e => prefs.setTimezone(e.target.value)}
+                      size={5}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-950 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 [&>option]:px-3 [&>option]:py-1 [&>option:checked]:bg-amber-500/20 [&>option:checked]:text-amber-400"
+                    >
+                      {filteredTimezones.map(tz => (
+                        <option key={tz} value={tz} className="px-3 py-1">{tz}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-neutral-500 mt-2">
+                      Current: <span className="text-amber-400 font-medium">{prefs.timezone}</span>
+                    </p>
                   </div>
                 </>
               )}

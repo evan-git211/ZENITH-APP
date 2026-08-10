@@ -53,6 +53,7 @@ import { StreakBadge } from '../components/StreakBadge';
 import { recordStudyActivity, getStreakData } from '../lib/streakService';
 import { exportToICal } from '../lib/icalExport';
 import { SkeletonCard, SkeletonDayCard } from '../components/Skeleton';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 interface ExamWithDetails {
   exam: Exam;
@@ -187,6 +188,7 @@ interface DayCardProps {
   isBulkMode: boolean;
   selectedAssignments: Set<string>;
   hoveredAssignment: string | null;
+  todayStr: string;
   onToggle: (assignmentId: string, isCompleted: boolean) => void;
   onContextMenu: (e: React.MouseEvent, assignmentId: string) => void;
   onMouseEnter: (assignmentId: string) => void;
@@ -197,14 +199,14 @@ interface DayCardProps {
 
 function DayCard({
   date, assignments, isRevision, topics, updating, isBulkMode,
-  selectedAssignments, hoveredAssignment, onToggle, onContextMenu,
+  selectedAssignments, hoveredAssignment, todayStr, onToggle, onContextMenu,
   onMouseEnter, onMouseLeave, onSelect, onDeleteTile,
 }: DayCardProps) {
   const topicMap = new Map(topics.map((t) => [t.id, t]));
   const completedCount = assignments.filter((a) => a.is_completed).length;
   const dateObj = parseISO(date);
-  const isToday = format(new Date(), 'yyyy-MM-dd') === date;
-  const isPast = isBefore(dateObj, startOfDay(new Date()));
+  const isToday = todayStr === date;
+  const isPast = date < todayStr;
   const phase = isRevision ? 'revision' : 'learning';
 
   return (
@@ -298,6 +300,7 @@ export function ExamSchedulePage() {
   const { examId } = useParams();
   const navigate = useNavigate();
   const { confirm, ConfirmNode } = useConfirm();
+  const { todayStart } = usePreferences();
   const [data, setData] = useState<ExamWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -364,7 +367,7 @@ export function ExamSchedulePage() {
 
       // Auto-recalculate only when incomplete topics have no assignment yet
       // Stale past assignments show an orange banner instead — preserving user intent
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = format(todayStart(), 'yyyy-MM-dd');
       const completedTopicIds = new Set(result.topics.filter((t) => t.is_completed).map((t) => t.id));
       const assignedTopicIds = new Set(result.assignments.map((a) => a.topic_id));
       const incompleteTopicIds = result.topics.filter((t) => !t.is_completed).map((t) => t.id);
@@ -420,7 +423,7 @@ export function ExamSchedulePage() {
       setData({ ...data, assignments: updatedAssignments, topics: updatedTopics });
 
       // Sync today's completed count for streak tracking
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = format(todayStart(), 'yyyy-MM-dd');
       const completedToday = updatedAssignments.filter(
         (a) => a.is_completed && a.completed_at &&
           format(parseISO(a.completed_at), 'yyyy-MM-dd') === todayStr
@@ -454,7 +457,7 @@ export function ExamSchedulePage() {
       if (src.phase !== dest.phase) return;
 
       // Silently block drops onto past dates
-      if (isBefore(parseISO(dest.date), startOfDay(new Date()))) return;
+      if (dest.date < todayStr) return;
 
       // Find assignment
       const assignment = data.assignments.find((a) => a.id === assignmentId);
@@ -750,7 +753,7 @@ export function ExamSchedulePage() {
     data.dayWeights.forEach((w) => {
       if (w.weight > 0) weightMap.set(w.day_of_week, w.weight);
     });
-    const today = startOfDay(new Date());
+    const today = todayStart();
     const exam = startOfDay(new Date(data.exam.exam_date));
     let studyDays = 0;
     for (let d = new Date(today); isBefore(d, exam); d = addDays(d, 1)) {
@@ -796,11 +799,11 @@ export function ExamSchedulePage() {
   const completedAssignments = data.assignments.filter((a) => a.is_completed).length;
   const totalAssignments = data.assignments.length;
   const progressPercentage = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
-  const daysRemaining = differenceInDays(new Date(data.exam.exam_date), new Date());
+  const daysRemaining = differenceInDays(new Date(data.exam.exam_date), todayStart());
   const totalTopics = data.topics.length;
 
   // Calculate today's completed assignments
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayStr = format(todayStart(), 'yyyy-MM-dd');
   const completedToday = data.assignments.filter(
     (a) => a.is_completed && a.completed_at && format(parseISO(a.completed_at), 'yyyy-MM-dd') === todayStr
   ).length;
@@ -1135,6 +1138,7 @@ export function ExamSchedulePage() {
                   isBulkMode={isBulkMode}
                   selectedAssignments={selectedAssignments}
                   hoveredAssignment={hoveredAssignment}
+                  todayStr={todayStr}
                   onToggle={handleToggleComplete}
                   onContextMenu={handleContextMenu}
                   onMouseEnter={(id) => setHoveredAssignment(id)}
@@ -1212,6 +1216,7 @@ export function ExamSchedulePage() {
                     isBulkMode={isBulkMode}
                     selectedAssignments={selectedAssignments}
                     hoveredAssignment={hoveredAssignment}
+                    todayStr={todayStr}
                     onToggle={handleToggleComplete}
                     onContextMenu={handleContextMenu}
                     onMouseEnter={(id) => setHoveredAssignment(id)}
