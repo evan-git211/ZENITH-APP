@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
@@ -307,6 +307,8 @@ export function ExamSchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   const [showEditPlan, setShowEditPlan] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [selectedAssignments, setSelectedAssignments] = useState<Set<string>>(new Set());
@@ -835,6 +837,63 @@ export function ExamSchedulePage() {
     <div className="min-h-screen page-enter">
       {ConfirmNode}
 
+      {/* 3-dot dropdown — portalled to body so it escapes page-enter stacking context */}
+      {showMenu && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[9990]"
+            onClick={() => setShowMenu(false)}
+          />
+          <div
+            className="fixed z-[9991] w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            <button
+              onClick={() => { setShowMenu(false); setShowEditPlan(true); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <Edit3 className="w-4 h-4 text-amber-400" />
+              Edit Study Plan
+            </button>
+            <button
+              onClick={() => {
+                setShowMenu(false);
+                exportToICal(data.exam, data.topics, data.assignments);
+                toast.success('Calendar exported');
+              }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <Download className="w-4 h-4" />
+              Export to iCal
+            </button>
+            <hr className="my-1 border-slate-700" />
+            <button
+              onClick={() => { setShowMenu(false); handleRecalculate(); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Recalculate
+            </button>
+            <button
+              onClick={() => { setShowMenu(false); handleReset(); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset Progress
+            </button>
+            <hr className="my-1 border-slate-700" />
+            <button
+              onClick={() => { setShowMenu(false); handleDelete(); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 transition"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Plan
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
       {showEditPlan && data && (
         <EditStudyPlanModal
           exam={data.exam}
@@ -1041,62 +1100,20 @@ export function ExamSchedulePage() {
               )}
             </div>
 
-            <div className="relative">
+            <div>
               <button
-                onClick={() => setShowMenu(!showMenu)}
+                ref={menuBtnRef}
+                onClick={() => {
+                  if (menuBtnRef.current) {
+                    const r = menuBtnRef.current.getBoundingClientRect();
+                    setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+                  }
+                  setShowMenu(v => !v);
+                }}
                 className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
-
-              {showMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-20 py-1.5">
-                    <button
-                      onClick={() => { setShowMenu(false); setShowEditPlan(true); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
-                    >
-                      <Edit3 className="w-4 h-4 text-amber-400" />
-                      Edit Study Plan
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowMenu(false);
-                        exportToICal(data.exam, data.topics, data.assignments);
-                        toast.success('Calendar exported');
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
-                    >
-                      <Download className="w-4 h-4" />
-                      Export to iCal
-                    </button>
-                    <hr className="my-1 border-slate-700" />
-                    <button
-                      onClick={() => { setShowMenu(false); handleRecalculate(); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Recalculate
-                    </button>
-                    <button
-                      onClick={() => { setShowMenu(false); handleReset(); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Reset Progress
-                    </button>
-                    <hr className="my-1 border-slate-700" />
-                    <button
-                      onClick={() => { setShowMenu(false); handleDelete(); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Plan
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
