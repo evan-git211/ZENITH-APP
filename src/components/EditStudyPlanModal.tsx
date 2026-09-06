@@ -116,8 +116,9 @@ export function EditStudyPlanModal({ exam, topics: initialTopics, dayWeights: in
       });
       onSave();
     } catch (err) {
-      console.error(err);
-      setErrors({ submit: 'Failed to save changes. Please try again.' });
+      console.error('updateExamDetails failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrors({ submit: `Save failed: ${msg}` });
     } finally {
       setSaving(false);
     }

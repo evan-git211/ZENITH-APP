@@ -338,34 +338,30 @@ export async function updateExamDetails(examId: string, updates: {
     if (error) throw error;
   }
 
-  // Upsert remaining and new topics
-  for (const topic of updates.topics) {
-    if (topic.id && existingIds.has(topic.id)) {
-      const { error } = await supabase.from('topics').update({
-        title: topic.title,
-        estimated_effort: topic.estimatedEffort,
-        updated_at: new Date().toISOString(),
-      }).eq('id', topic.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from('topics').insert({
-        exam_id: examId,
-        title: topic.title,
-        estimated_effort: topic.estimatedEffort,
-      });
-      if (error) throw error;
-    }
+  // Update existing topics (sequential to preserve order)
+  for (const topic of updates.topics.filter(t => t.id && existingIds.has(t.id!))) {
+    const { error } = await supabase.from('topics').update({
+      title: topic.title,
+      estimated_effort: topic.estimatedEffort,
+      updated_at: new Date().toISOString(),
+    }).eq('id', topic.id!);
+    if (error) throw error;
   }
 
-  // 3. Upsert day weights
-  const weightsToUpsert = updates.dayWeights.map(w => ({
-    exam_id: examId,
-    day_of_week: w.dayOfWeek,
-    weight: w.weight,
-  }));
-  const { error: weightsErr } = await supabase
-    .from('day_weights')
-    .upsert(weightsToUpsert, { onConflict: 'exam_id,day_of_week' });
+  // Insert new topics in one batch
+  const newTopics = updates.topics.filter(t => !t.id || !existingIds.has(t.id!));
+  if (newTopics.length > 0) {
+    const { error } = await supabase.from('topics').insert(
+      newTopics.map(t => ({ exam_id: examId, title: t.title, estimated_effort: t.estimatedEffort }))
+    );
+    if (error) throw error;
+  }
+
+  // 3. Replace day weights: delete all then re-insert (avoids needing a named unique constraint)
+  await supabase.from('day_weights').delete().eq('exam_id', examId);
+  const { error: weightsErr } = await supabase.from('day_weights').insert(
+    updates.dayWeights.map(w => ({ exam_id: examId, day_of_week: w.dayOfWeek, weight: w.weight }))
+  );
   if (weightsErr) throw weightsErr;
 
   // 4. Delete all existing assignments and regenerate from scratch
