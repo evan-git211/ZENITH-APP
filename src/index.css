@@ -233,6 +233,18 @@ html.light .glass-banner {
   border-bottom-color: rgba(0,0,0,0.1) !important;
 }
 
+/* Same lighter tone as .glass-surface, without the border shorthand so it
+   doesn't clash with elements that set their own conditional border color
+   (e.g. the To-Do cards' active-timer / overdue borders). */
+.todo-surface {
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html.light .todo-surface {
+  background: rgba(255,255,255,0.88) !important;
+}
+
 /* ── Page transitions ───────────────────────────────────────────────────── */
 @keyframes page-fade-in {
   from { opacity: 0; transform: translateY(6px); }
