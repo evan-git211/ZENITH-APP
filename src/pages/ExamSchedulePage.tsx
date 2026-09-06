@@ -54,6 +54,7 @@ import { recordStudyActivity, getStreakData } from '../lib/streakService';
 import { exportToICal } from '../lib/icalExport';
 import { SkeletonCard, SkeletonDayCard } from '../components/Skeleton';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { EditStudyPlanModal } from '../components/EditStudyPlanModal';
 
 interface ExamWithDetails {
   exam: Exam;
@@ -306,6 +307,7 @@ export function ExamSchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showEditPlan, setShowEditPlan] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [selectedAssignments, setSelectedAssignments] = useState<Set<string>>(new Set());
   const [isBulkMode, setIsBulkMode] = useState(false);
@@ -833,12 +835,26 @@ export function ExamSchedulePage() {
     <div className="min-h-screen page-enter">
       {ConfirmNode}
 
+      {showEditPlan && data && (
+        <EditStudyPlanModal
+          exam={data.exam}
+          topics={data.topics}
+          dayWeights={data.dayWeights}
+          onClose={() => setShowEditPlan(false)}
+          onSave={async () => {
+            setShowEditPlan(false);
+            if (examId) await loadExam(examId);
+            toast.success('Study plan updated');
+          }}
+        />
+      )}
+
       {/* Add Topic Modal */}
-      {showAddTopic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowAddTopic(false)}>
+      {showAddTopic && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={() => setShowAddTopic(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-md glass-surface rounded-2xl p-6 shadow-2xl"
+            className="relative w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -905,7 +921,8 @@ export function ExamSchedulePage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <Header examName={data.exam.name} />
@@ -1035,14 +1052,21 @@ export function ExamSchedulePage() {
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-48 glass-surface rounded-lg shadow-lg z-20 py-1">
+                  <div className="absolute right-0 mt-2 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-20 py-1.5">
+                    <button
+                      onClick={() => { setShowMenu(false); setShowEditPlan(true); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                    >
+                      <Edit3 className="w-4 h-4 text-amber-400" />
+                      Edit Study Plan
+                    </button>
                     <button
                       onClick={() => {
                         setShowMenu(false);
                         exportToICal(data.exam, data.topics, data.assignments);
                         toast.success('Calendar exported');
                       }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
                     >
                       <Download className="w-4 h-4" />
                       Export to iCal
@@ -1050,14 +1074,14 @@ export function ExamSchedulePage() {
                     <hr className="my-1 border-slate-700" />
                     <button
                       onClick={() => { setShowMenu(false); handleRecalculate(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Recalculate
                     </button>
                     <button
                       onClick={() => { setShowMenu(false); handleReset(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
                     >
                       <RotateCcw className="w-4 h-4" />
                       Reset Progress
@@ -1065,7 +1089,7 @@ export function ExamSchedulePage() {
                     <hr className="my-1 border-slate-700" />
                     <button
                       onClick={() => { setShowMenu(false); handleDelete(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 transition"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete Plan

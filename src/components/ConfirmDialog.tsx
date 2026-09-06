@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -27,7 +28,7 @@ export function ConfirmDialog({
     return () => document.removeEventListener('keydown', handleKey);
   }, [onCancel]);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-6 max-w-sm w-full">
@@ -57,6 +58,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

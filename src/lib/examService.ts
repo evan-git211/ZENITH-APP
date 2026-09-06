@@ -307,6 +307,72 @@ export async function deleteAssignmentsOnDate(
   if (error) throw error;
 }
 
+// Update all exam details and recalculate the full schedule
+export async function updateExamDetails(examId: string, updates: {
+  name: string;
+  examDate: Date;
+  revisionDays: number;
+  topics: { id?: string; title: string; estimatedEffort: number }[];
+  dayWeights: { dayOfWeek: number; weight: number }[];
+}): Promise<void> {
+  // 1. Update exam header
+  const { error: examErr } = await supabase.from('exams').update({
+    name: updates.name.trim(),
+    exam_date: updates.examDate.toISOString().split('T')[0],
+    revision_days: updates.revisionDays,
+  }).eq('id', examId);
+  if (examErr) throw examErr;
+
+  // 2. Sync topics — preserve completed ones by id, add new, delete removed
+  const { data: existingTopics, error: topicFetchErr } = await supabase
+    .from('topics').select('id').eq('exam_id', examId);
+  if (topicFetchErr) throw topicFetchErr;
+
+  const existingIds = new Set((existingTopics ?? []).map((t: { id: string }) => t.id));
+  const keepIds = new Set(updates.topics.filter(t => t.id).map(t => t.id!));
+
+  // Delete topics that were removed
+  const toDelete = [...existingIds].filter(id => !keepIds.has(id));
+  if (toDelete.length > 0) {
+    const { error } = await supabase.from('topics').delete().in('id', toDelete);
+    if (error) throw error;
+  }
+
+  // Upsert remaining and new topics
+  for (const topic of updates.topics) {
+    if (topic.id && existingIds.has(topic.id)) {
+      const { error } = await supabase.from('topics').update({
+        title: topic.title,
+        estimated_effort: topic.estimatedEffort,
+        updated_at: new Date().toISOString(),
+      }).eq('id', topic.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('topics').insert({
+        exam_id: examId,
+        title: topic.title,
+        estimated_effort: topic.estimatedEffort,
+      });
+      if (error) throw error;
+    }
+  }
+
+  // 3. Upsert day weights
+  const weightsToUpsert = updates.dayWeights.map(w => ({
+    exam_id: examId,
+    day_of_week: w.dayOfWeek,
+    weight: w.weight,
+  }));
+  const { error: weightsErr } = await supabase
+    .from('day_weights')
+    .upsert(weightsToUpsert, { onConflict: 'exam_id,day_of_week' });
+  if (weightsErr) throw weightsErr;
+
+  // 4. Delete all existing assignments and regenerate from scratch
+  await supabase.from('scheduled_assignments').delete().eq('exam_id', examId);
+  await recalculateSchedule(examId);
+}
+
 // Delete an exam and all its data
 export async function deleteExam(examId: string): Promise<void> {
   const { error } = await supabase.from('exams').delete().eq('id', examId);
