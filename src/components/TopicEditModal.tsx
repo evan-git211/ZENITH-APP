@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Trash2, Calendar, Clock, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import type { Topic, ScheduledAssignment } from '../types/database';
@@ -38,9 +39,9 @@ export function TopicEditModal({ topic, assignment, onSave, onDelete, onClose }:
 
   const isMoved = assignment.assigned_date !== assignment.recommended_date;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 dark:bg-black/70" onClick={onClose} />
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
 
       <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
@@ -198,6 +199,7 @@ export function TopicEditModal({ topic, assignment, onSave, onDelete, onClose }:
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

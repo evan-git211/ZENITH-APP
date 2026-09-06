@@ -986,42 +986,46 @@ export function ExamSchedulePage() {
 
       <Header examName={data.exam.name} />
 
-      {/* Context Menu */}
+      {/* Context Menu — portalled to body */}
       {contextMenu && (() => {
         const assignment = data.assignments.find((a) => a.id === contextMenu.assignmentId);
         const topic = assignment ? data.topics.find((t) => t.id === assignment.topic_id) : null;
         const canRestore = assignment && assignment.assigned_date !== assignment.recommended_date;
-        return (
-          <div
-            className="fixed z-50 glass-surface rounded-lg shadow-xl py-1 min-w-48"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => { if (topic) setEditingTopic(topic); setContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+        return createPortal(
+          <>
+            <div className="fixed inset-0 z-[9990]" onClick={() => setContextMenu(null)} />
+            <div
+              className="fixed z-[9991] bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 min-w-48"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <Edit3 className="w-4 h-4" />
-              Edit Topic
-            </button>
-            {canRestore && (
               <button
-                onClick={() => handleRestoreTopic(contextMenu.assignmentId)}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition"
+                onClick={() => { if (topic) setEditingTopic(topic); setContextMenu(null); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
               >
-                <Undo2 className="w-4 h-4" />
-                Restore to {format(parseISO(assignment!.recommended_date), 'MMM d')}
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                Edit Topic
               </button>
-            )}
-            <hr className="my-1 border-slate-700" />
-            <button
-              onClick={() => { if (topic) handleTopicDelete(topic.id); }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-900/20 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Topic
-            </button>
-          </div>
+              {canRestore && (
+                <button
+                  onClick={() => handleRestoreTopic(contextMenu.assignmentId)}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                >
+                  <Undo2 className="w-4 h-4 text-blue-400" />
+                  Restore to {format(parseISO(assignment!.recommended_date), 'MMM d')}
+                </button>
+              )}
+              <hr className="my-1 border-slate-700" />
+              <button
+                onClick={() => { if (topic) handleTopicDelete(topic.id); setContextMenu(null); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Topic
+              </button>
+            </div>
+          </>,
+          document.body
         );
       })()}
 
