@@ -571,7 +571,7 @@ export function TodoTab() {
 
     const inner = (
       <div
-        className={`flex items-center gap-3 p-3.5 rounded-xl bg-neutral-900 border transition group ${
+        className={`flex items-center gap-3 p-3.5 rounded-xl todo-surface border transition group ${
           activeTimerTodoId === todo.id
             ? 'border-amber-500 shadow-md shadow-amber-500/10'
             : dlInfo?.urgency === 'overdue'
@@ -654,7 +654,7 @@ export function TodoTab() {
             </button>
             {showDeadlinePicker === todo.id && (
               <div
-                className="absolute right-0 top-full mt-1 z-50 bg-neutral-900 rounded-xl border border-neutral-800 shadow-xl p-3 w-72"
+                className="absolute right-0 top-full mt-1 z-50 todo-surface rounded-xl border border-neutral-800 shadow-xl p-3 w-72"
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-xs font-semibold text-neutral-500 mb-2 uppercase tracking-wide">Set deadline</p>
@@ -744,7 +744,7 @@ export function TodoTab() {
             </button>
             {showTimerPicker === todo.id && (
               <div
-                className="absolute right-0 top-full mt-1 z-50 bg-neutral-900 rounded-xl border border-neutral-800 shadow-xl p-3 w-64"
+                className="absolute right-0 top-full mt-1 z-50 todo-surface rounded-xl border border-neutral-800 shadow-xl p-3 w-64"
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-xs font-semibold text-neutral-500 mb-2 uppercase tracking-wide">Choose duration</p>
@@ -835,7 +835,7 @@ export function TodoTab() {
 
       {/* New category form */}
       {showCategoryForm && (
-        <div className="mb-4 p-4 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div className="mb-4 p-4 rounded-xl todo-surface border border-neutral-800">
           <p className="text-sm font-medium text-neutral-300 mb-3">New Category</p>
           <div className="flex gap-3 items-start flex-wrap">
             <input
@@ -869,7 +869,7 @@ export function TodoTab() {
 
       {/* Global add-todo form */}
       {showTodoForm && (
-        <div className="mb-4 p-4 rounded-xl bg-neutral-900 border border-neutral-800">
+        <div className="mb-4 p-4 rounded-xl todo-surface border border-neutral-800">
           <div className="flex gap-3">
             <input autoFocus type="text" value={newTodoTitle}
               onChange={(e) => setNewTodoTitle(e.target.value)}
@@ -970,7 +970,7 @@ export function TodoTab() {
               return (
                 <div key={cat.id} className="rounded-xl border border-neutral-800">
                   {/* Category header */}
-                  <div className="flex items-center justify-between px-4 py-3 bg-neutral-900 border-b border-neutral-800">
+                  <div className="flex items-center justify-between px-4 py-3 todo-surface border-b border-neutral-800">
                     <div className="flex items-center gap-2.5">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                       <CategoryNameEditor category={cat} onRename={handleRenameCategory} />
@@ -991,7 +991,7 @@ export function TodoTab() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`p-3 space-y-2 min-h-[48px] transition-colors ${snapshot.isDraggingOver ? 'bg-neutral-800/40' : 'bg-neutral-950/30'}`}
+                        className={`p-3 space-y-2 min-h-[48px] transition-colors ${snapshot.isDraggingOver ? 'bg-white/10' : 'bg-white/[0.02]'}`}
                       >
                         {catTodos.length === 0 && !snapshot.isDraggingOver && (
                           <p className="text-xs text-neutral-700 italic text-center py-2">Drop to-dos here</p>
@@ -1013,7 +1013,7 @@ export function TodoTab() {
               return (
                 <div className={`rounded-xl border border-neutral-800 ${categories.length === 0 ? '' : ''}`}>
                   {categories.length > 0 && (
-                    <div className="flex items-center gap-2.5 px-4 py-3 bg-neutral-900 border-b border-neutral-800">
+                    <div className="flex items-center gap-2.5 px-4 py-3 todo-surface border-b border-neutral-800">
                       <div className="w-3 h-3 rounded-full bg-neutral-600 flex-shrink-0" />
                       <span className="text-sm font-semibold text-neutral-400">Uncategorized</span>
                       <span className="text-xs text-neutral-600">{uncatTodos.length}</span>
@@ -1024,7 +1024,7 @@ export function TodoTab() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`p-3 space-y-2 min-h-[48px] transition-colors ${snapshot.isDraggingOver ? 'bg-neutral-800/40' : categories.length > 0 ? 'bg-neutral-950/30' : ''}`}
+                        className={`p-3 space-y-2 min-h-[48px] transition-colors ${snapshot.isDraggingOver ? 'bg-white/10' : categories.length > 0 ? 'bg-white/[0.02]' : ''}`}
                       >
                         {uncatTodos.map((todo, idx) => renderTodoCard(todo, idx))}
                         {provided.placeholder}

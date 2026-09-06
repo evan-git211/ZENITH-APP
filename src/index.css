@@ -233,6 +233,18 @@ html.light .glass-banner {
   border-bottom-color: rgba(0,0,0,0.1) !important;
 }
 
+/* A visibly lighter navy than bg-neutral-900/950, without the border
+   shorthand so it doesn't clash with elements that set their own
+   conditional border color (e.g. the To-Do cards' active-timer / overdue
+   borders). Solid (not translucent) so it reads the same regardless of
+   what's behind it. */
+.todo-surface {
+  background: #1e293b;
+}
+html.light .todo-surface {
+  background: rgba(255,255,255,0.88) !important;
+}
+
 /* ── Page transitions ───────────────────────────────────────────────────── */
 @keyframes page-fade-in {
   from { opacity: 0; transform: translateY(6px); }
